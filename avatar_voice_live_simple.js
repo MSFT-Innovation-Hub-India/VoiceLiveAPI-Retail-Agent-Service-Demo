@@ -252,6 +252,13 @@ class VoiceLiveApp {
             // Special logging for audio messages
             if (message.type && message.type.includes('audio')) {
                 console.log('🎵 AUDIO MESSAGE:', message.type, 'Delta length:', message.delta ? message.delta.length : 'no delta');
+                if (message.type === 'response.audio.delta') {
+                    console.log('✅ NEW QUEUE: response.audio.delta received');
+                } else if (message.type === 'response.audio.done') {
+                    console.log('🔚 AUDIO DONE:', message.type);
+                } else {
+                    console.log('🔍 OTHER AUDIO MESSAGE:', message.type, JSON.stringify(message, null, 2));
+                }
             }
             
             switch (message.type) {
@@ -333,10 +340,14 @@ class VoiceLiveApp {
                     break;
                     
                 default:
-                    console.log('🔍 UNHANDLED MESSAGE TYPE:', message.type, message);
-                    // Log full message for audio-related unhandled types
+                    console.log('🔍 UNHANDLED MESSAGE TYPE:', message.type);
+                    // Log full message for audio-related unhandled types OR if it contains audio data
                     if (message.type && (message.type.includes('audio') || message.type.includes('delta'))) {
                         console.log('🔍 FULL AUDIO MESSAGE:', JSON.stringify(message, null, 2));
+                    }
+                    // Also check for any message containing audio data fields
+                    if (message.audio_data || message.audio || message.delta) {
+                        console.log('🔍 MESSAGE WITH AUDIO DATA:', message.type, JSON.stringify(message, null, 2));
                     }
             }
             
