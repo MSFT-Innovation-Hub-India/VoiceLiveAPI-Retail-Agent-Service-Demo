@@ -1,4 +1,5 @@
 #Speech example to test the Azure Voice Live API
+# this is a copy paste of the code in https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-agents-quickstart?tabs=windows%2Ckeyless&pivots=programming-language-python
 import os
 import uuid
 import json
@@ -6,7 +7,6 @@ import time
 import base64
 import logging
 import threading
-from xmlrpc import client
 import numpy as np
 import sounddevice as sd
 import queue
@@ -15,10 +15,8 @@ import sys
 
 from collections import deque
 from dotenv import load_dotenv
-from azure.core.credentials import TokenCredential
 from azure.identity import DefaultAzureCredential
 from typing import Dict, Union, Literal, Set
-from typing_extensions import Iterator, TypedDict, Required
 import websocket
 from websocket import WebSocketApp
 from datetime import datetime

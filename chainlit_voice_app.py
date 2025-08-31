@@ -12,10 +12,8 @@ import queue
 import asyncio
 from collections import deque
 from dotenv import load_dotenv
-from azure.core.credentials import TokenCredential
 from azure.identity import DefaultAzureCredential
 from typing import Dict, Union, Literal, Set
-from typing_extensions import Iterator, TypedDict, Required
 import websocket
 from websocket import WebSocketApp
 from datetime import datetime
