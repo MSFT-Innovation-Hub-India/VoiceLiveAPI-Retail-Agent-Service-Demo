@@ -169,6 +169,7 @@ ws_message_queue = queue.Queue()
 # Global connection state
 connection_state = {
     'connected': False,
+    'session_ready': False,
     'streaming': False,
     'user_speaking': False,
     'assistant_responding': False,
@@ -197,12 +198,13 @@ async def handle_websocket_message(message_data: str):
     try:
         event = json.loads(message_data)
         event_type = event.get("type")
-        
+
         print(f"[DEBUG] Received event: {event_type}")
-        
+
         if event_type == "session.created":
             await cl.Message(content="🔗 **Connected to Azure Voice Live API**", author="System").send()
             connection_state['connected'] = True
+            connection_state['session_ready'] = True
             # Start audio capture now that the session is ready
             if connection_state.get('streaming') and not (
                 connection_state.get('audio_thread') and connection_state['audio_thread'].is_alive()
@@ -210,10 +212,10 @@ async def handle_websocket_message(message_data: str):
                 t = threading.Thread(target=listen_and_send_audio, daemon=True)
                 connection_state['audio_thread'] = t
                 t.start()
-            
+
         elif event_type == "session.updated":
             print("[DEBUG] Session updated")
-            
+
         elif event_type == "input_audio_buffer.speech_started":
             print("[DEBUG] Speech started detected")
             # Only update and notify if not already speaking
@@ -227,95 +229,81 @@ async def handle_websocket_message(message_data: str):
                         "type": "response.cancel",
                         "event_id": str(uuid.uuid4())
                     })
-                # Flush any queued audio to reduce perceived echo
                 audio_player.clear()
             except Exception as e:
                 logger.debug(f"Failed to cancel response: {e}")
-            
+
         elif event_type == "input_audio_buffer.speech_stopped":
             print("[DEBUG] Speech stopped detected")
             connection_state['user_speaking'] = False
-            
+
         elif event_type == "input_audio_buffer.committed":
             print("[DEBUG] Audio buffer committed")
-            
+
         elif event_type == "conversation.item.input_audio_transcription.completed":
             user_transcript = event.get("transcript", "")
             if user_transcript:
                 print(f"[DEBUG] User transcript received: {user_transcript}")
-                # Send user message to Chainlit as plain text (Chainlit sanitizes HTML)
-                await cl.Message(content=f"{USER_PREFIX} {user_transcript}", author="You").send()
+                # Use Chainlit's native user-styled bubble so it matches typed messages
+                try:
+                    await cl.Message(content=user_transcript, author="user", type="user_message").send()
+                except Exception:
+                    await cl.Message(content=user_transcript, author="user").send()
                 connection_state['user_speaking'] = False
                 logger.info(f"User said: {user_transcript}")
-                
+
         elif event_type == "response.created":
             current_response_id = event.get("response", {}).get("id")
             logger.info(f"New response created: {current_response_id}")
             print(f"[DEBUG] Response created: {current_response_id}")
             connection_state['assistant_responding'] = True
-            # Initialize response buffer for this session
             cl.user_session.set("current_assistant_response", "")
-            
-        elif event_type == "response.audio_transcript.delta":
-            transcript_delta = event.get("delta", "")
-            if transcript_delta:
-                # Build up the assistant's response incrementally
+
+        elif event_type in ("response.audio_transcript.delta", "response.output_text.delta", "response.text.delta"):
+            delta = event.get("delta", "")
+            if delta:
                 current_response = cl.user_session.get("current_assistant_response", "")
-                current_response += transcript_delta
-                cl.user_session.set("current_assistant_response", current_response)
-                print(f"[DEBUG] Assistant transcript delta: {transcript_delta}")
-                
-        elif event_type == "response.audio_transcript.done":
-            # Assistant has finished speaking, send the complete response
+                cl.user_session.set("current_assistant_response", current_response + delta)
+                print(f"[DEBUG] Assistant delta: {delta}")
+
+        elif event_type in ("response.audio_transcript.done", "response.output_text.done", "response.text.done"):
             complete_response = cl.user_session.get("current_assistant_response", "")
             if complete_response:
                 print(f"[DEBUG] Assistant complete response: {complete_response}")
-                # Send assistant message to Chainlit
-                await cl.Message(content=f"{ASSISTANT_PREFIX} {complete_response}", author="Assistant").send()
-                # Clear the response buffer
-                cl.user_session.set("current_assistant_response", "")
-                connection_state['assistant_responding'] = False
-        
-        # Text output fallback events
-        elif event_type in ("response.output_text.delta", "response.text.delta"):
-            text_delta = event.get("delta", "")
-            if text_delta:
-                current_response = cl.user_session.get("current_assistant_response", "")
-                current_response += text_delta
-                cl.user_session.set("current_assistant_response", current_response)
-                print(f"[DEBUG] Assistant text delta: {text_delta}")
-        elif event_type in ("response.output_text.done", "response.text.done"):
-            complete_response = cl.user_session.get("current_assistant_response", "")
-            if complete_response:
-                print(f"[DEBUG] Assistant complete text: {complete_response}")
-                await cl.Message(content=f"{ASSISTANT_PREFIX} {complete_response}", author="Assistant").send()
-                cl.user_session.set("current_assistant_response", "")
-                connection_state['assistant_responding'] = False
-                
+                await cl.Message(content=f"{ASSISTANT_PREFIX} {complete_response}").send()
+            cl.user_session.set("current_assistant_response", "")
+            connection_state['assistant_responding'] = False
+
         elif event_type == "response.audio.delta":
-            # Handle audio playback only if assistant is actively responding
             audio_data = event.get("delta")
             if audio_data and connection_state.get('assistant_responding', False):
                 audio_player.add_audio_chunk(audio_data)
-                
+
         elif event_type == "response.audio.done":
             print("[DEBUG] Assistant audio done")
-            
-        elif event_type in ["response.content_part.added", "response.output_item.added", 
-                           "conversation.item.created", "response.content_part.done", 
-                           "response.output_item.done", "response.done"]:
+            connection_state['assistant_responding'] = False
+
+        elif event_type in [
+            "response.content_part.added",
+            "response.output_item.added",
+            "conversation.item.created",
+            "response.content_part.done",
+            "response.output_item.done",
+            "response.done",
+        ]:
             print(f"[DEBUG] {event_type}")
-            
+            if event_type == "response.done":
+                connection_state['assistant_responding'] = False
+
         elif event_type == "error":
-            # Log and surface error details
             err = event.get("error") or event
             logger.warning(f"Voice Live error event: {err}")
-            # Keep console concise
             print(f"[DEBUG] Error event: {json.dumps(err)[:500]}")
+            connection_state['assistant_responding'] = False
+
         else:
-            # For debugging unknown events
             print(f"[DEBUG] Unhandled event type: {event_type}")
-            
+
     except Exception as e:
         logger.error(f"Error handling WebSocket message: {e}")
         logger.error(traceback.format_exc())
@@ -383,12 +371,14 @@ def on_error(ws, error):
     """Called when a WebSocket error occurs"""
     logger.error(f"WebSocket error: {error}")
     connection_state['connected'] = False
+    connection_state['session_ready'] = False
     print(f"[DEBUG] WebSocket error: {error}")
 
 def on_close(ws, close_status_code, close_msg):
     """Called when WebSocket connection is closed"""
     print(f"[DEBUG] WebSocket connection closed: {close_status_code} - {close_msg}")
     connection_state['connected'] = False
+    connection_state['session_ready'] = False
     connection_state['streaming'] = False
 
 def listen_and_send_audio():
@@ -646,6 +636,16 @@ async def send_text_to_agent(text: str):
     """Send a typed text message to the Voice Live session and request a response."""
     if not (connection_state.get('connection') and connection_state.get('connected')):
         return
+    # Wait briefly for session to be fully ready (after session.created)
+    if not connection_state.get('session_ready'):
+        # Give it up to ~2s to become ready
+        for _ in range(20):
+            if connection_state.get('session_ready'):
+                break
+            await asyncio.sleep(0.1)
+        if not connection_state.get('session_ready'):
+            await cl.Message(content="⏳ Still connecting… please try again in a moment.", author="System").send()
+            return
 
     # Create a conversation item with user text, then request a response
     try:
