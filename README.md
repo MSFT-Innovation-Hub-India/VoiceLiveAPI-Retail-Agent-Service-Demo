@@ -1,18 +1,24 @@
-# Contoso Retail Assistant — Voice + Chat (Azure Voice Live + Chainlit)
+# Contoso Retail Assistant — Voice + Chat (Azure Voice Live API + Chainlit)
 
-An interactive retail assistant that supports natural voice and text conversations using Azure Voice Live. Built with Chainlit for responsive, real-time UI and robust audio handling.
+An interactive retail assistant that supports natural voice and text conversations using Azure Voice Live API. Built with Chainlit for responsive, real-time UI and robust audio handling.
+
+It uses an Azure AI Foundry Project and an Agent in it that has tool actions configured - in this sampple, it uses the Contoso Retail eCom APIs that are configured using the Swagger definition.
+
 ## 🛍 Use case
 
 Contoso’s in-store/online assistant to:
 - Answer product questions (price, specs, availability)
-- Track orders and returns status
-- Recommend products based on needs
-- Provide store info (hours, locations, policies)
+- place orders
+
+- what are the products in Winter wear
+- What are the products in Active Wear
+- I want to order 5 numbers of Product ID 24
+
 
 Optimized for hands-free, multi-turn conversations with live transcripts and spoken replies.
 ## 🔧 What’s inside (implementation)
 
-- Chainlit app (`chainlit_voice_app.py`) with a threaded WebSocket client to Azure Voice Live (`/voice-live/realtime`)
+- Chainlit app (`chainlit_voice_app.py`) with a threaded WebSocket client to Azure Voice Live API (`/voice-live/realtime`)
 - Azure AD auth via DefaultAzureCredential; scopes: `https://ai.azure.com/.default`
 - Server Voice settings: 24kHz audio, semantic VAD, deep noise suppression, server echo cancellation
 - Half‑duplex mic gating to reduce echo/self‑interruptions (blocks mic while assistant audio plays + brief tail cooldown)
@@ -26,7 +32,13 @@ Optimized for hands-free, multi-turn conversations with live transcripts and spo
 - An Azure AI Foundry project/agent configured for Voice Live
 - Ability to obtain AAD tokens via DefaultAzureCredential (e.g., Azure CLI sign-in)
 
-Environment variables (in a `.env` at repo root):
+Environment variables (in a `.env` at repo root). Start by copying the template:
+
+```powershell
+Copy-Item .env.example .env -Force
+```
+
+Then set these variables:
 - `AZURE_VOICE_LIVE_ENDPOINT` (e.g., `https://<your-endpoint>.api.cognitive.microsoft.com`)
 - `AZURE_VOICE_LIVE_API_VERSION` (defaults to `2025-05-01-preview`)
 - `AI_FOUNDRY_PROJECT_NAME`
@@ -70,7 +82,7 @@ Open the Chainlit URL shown in the terminal.
 ## 🧭 High-level flow
 
 1) Chainlit UI ←→ WebSocket client
-2) Azure Voice Live session configured (VAD, noise/echo, voice)
+2) Azure Voice Live API session configured (VAD, noise/echo, voice)
 3) Mic audio → `input_audio_buffer.append`
 4) Server transcribes; user transcript is rendered
 5) Agent responds; audio frames stream back and are played
@@ -81,11 +93,11 @@ Open the Chainlit URL shown in the terminal.
 - “Could not reach the server” banner: Chainlit UI reconnect notice; if conversation continues, you can ignore. Refresh if it persists.
 - No audio capture: ensure mic permission granted and the correct input device is active.
 - Self‑interruptions/echo: increase `ASSISTANT_TAIL_COOLDOWN_MS` in `chainlit_voice_app.py` to 400–600ms; optionally raise `silence_duration_ms`/VAD thresholds in the session config.
-- Typed message ignored on first try: ensure the app shows “Connected to Azure Voice Live API” before sending; the app already waits briefly for session readiness.
+- Typed message ignored on first try: ensure the app shows “Connected to Azure Voice Live API API” before sending; the app already waits briefly for session readiness.
 
 ## 📁 Project structure
 
-- `chainlit_voice_app.py` — Chainlit app and Azure Voice Live client
+- `chainlit_voice_app.py` — Chainlit app and Azure Voice Live API client
 - `voice_live_proxy_aiohttp.py` — optional proxy sample (if used)
 - `voice-live-*.py` — quickstarts/samples
 - `logs/` — runtime logs
@@ -94,14 +106,14 @@ Open the Chainlit URL shown in the terminal.
 
 - Uses Azure AD tokens (DefaultAzureCredential) with scope `https://ai.azure.com/.default`.
 - Token is sent as `Authorization: Bearer` and as `agent-access-token` in the WS query.
-- Audio and text are streamed to Azure Voice Live. Review your organization’s privacy/compliance requirements before production use.
+- Audio and text are streamed to Azure Voice Live API. Review your organization’s privacy/compliance requirements before production use.
 
 ---
 
-Made with Chainlit and Azure Voice Live for a smooth retail voice experience.
+Made with Chainlit and Azure Voice Live API for a smooth retail voice experience.
 # Contoso Retail Assistant - Voice Chat
 
-Welcome to the **Contoso Retail Assistant**! This is a voice-enabled AI assistant powered by Azure Voice Live API.
+Welcome to the **Contoso Retail Assistant**! This is a voice-enabled AI assistant powered by Azure Voice Live API API.
 
 ## 🎤 How to Use
 
