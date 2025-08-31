@@ -158,10 +158,13 @@ class AudioPlayerAsync:
 
     def add_data(self, data: bytes):
         with self.lock:
-            np_data = np.frombuffer(data, dtype=np.int16)
-            self.queue.append(np_data)
-            if not self.playing and len(self.queue) > 0:
-                self.start()
+            # Only add data if we're currently playing or queue is empty
+            # This prevents adding stale audio data after interruption
+            if self.playing or len(self.queue) == 0:
+                np_data = np.frombuffer(data, dtype=np.int16)
+                self.queue.append(np_data)
+                if not self.playing and len(self.queue) > 0:
+                    self.start()
 
     def start(self):
         if not self.playing:
@@ -207,6 +210,7 @@ def listen_and_send_audio(connection: VoiceLiveConnection) -> None:
 def receive_audio_and_playback(connection: VoiceLiveConnection) -> None:
     """Continuously receive and play audio from API"""
     last_audio_item_id = None
+    current_response_id = None
     audio_player = AudioPlayerAsync()
 
     logger.info("Starting continuous audio playback...")
@@ -251,9 +255,21 @@ def receive_audio_and_playback(connection: VoiceLiveConnection) -> None:
                     if agent_audio:
                         logger.info(f"Agent audio transcript: {agent_audio}")
 
+                elif event_type == "response.created":
+                    current_response_id = event.get("response", {}).get("id")
+                    logger.info(f"New response created: {current_response_id}")
+
                 elif event_type == "response.audio.delta":
+                    response_id = event.get("response_id")
+                    # Only process audio if it's from the current response
+                    if response_id != current_response_id:
+                        logger.debug(f"Ignoring audio from old response: {response_id}")
+                        continue
+                        
                     if event.get("item_id") != last_audio_item_id:
+                        # New audio item started, clear any previous audio in queue
                         last_audio_item_id = event.get("item_id")
+                        logger.debug(f"New audio item started: {last_audio_item_id}")
 
                     bytes_data = base64.b64decode(event.get("delta", ""))
                     if bytes_data:
@@ -261,8 +277,20 @@ def receive_audio_and_playback(connection: VoiceLiveConnection) -> None:
                         audio_player.add_data(bytes_data)
 
                 elif event_type == "input_audio_buffer.speech_started":
-                    logger.info("Speech started - stopping playback")
+                    logger.info("Speech started - stopping playback and cancelling response")
                     audio_player.stop()
+                    current_response_id = None  # Clear current response tracking
+                    # Cancel any ongoing response to prevent dual audio
+                    cancel_response = {
+                        "type": "response.cancel",
+                        "event_id": str(uuid.uuid4())
+                    }
+                    connection.send(json.dumps(cancel_response))
+
+                elif event_type == "response.cancelled":
+                    logger.info("Response cancelled successfully")
+                    audio_player.stop()  # Ensure playback is stopped
+                    current_response_id = None  # Clear response tracking
 
                 elif event_type == "error":
                     error_details = event.get("error", {})

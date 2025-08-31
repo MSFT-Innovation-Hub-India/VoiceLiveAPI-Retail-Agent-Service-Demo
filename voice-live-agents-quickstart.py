@@ -54,7 +54,7 @@ def main() -> None:
         connection = client.connect(
             project_name=project_name,
             agent_id=agent_id,
-            agent_access_token=token.token
+            agent_access_token=token.token,
         )
     except Exception as e:
         print("Error connecting to Voice Live API:")
