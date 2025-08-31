@@ -32,7 +32,7 @@ language = "en"
 
 [UI]
 # Name of the app and chatbot.
-name = "Contoso Retail Assistant"
+name = "Contoso Retail Voice Agent"
 
 # Show the readme while the conversation is empty.
 show_readme_as_default = true
@@ -54,14 +54,14 @@ hide_cot = false
 
 # Specify a CSS file that can be used to customize the user interface.
 # The CSS file can be served from the public directory or via an external link.
-# custom_css = "/public/style.css"
+custom_css = "/public/style.css"
 
 # Specify a Javascript file that can be used to customize the user interface.
 # The Javascript file can be served from the public directory.
 # custom_js = "/public/script.js"
 
 # Specify a custom font url.
-# custom_font = ""
+custom_font = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
 
 # Specify a custom build directory for the UI. This is used to override the UI.
 # custom_build = "./public/build"
