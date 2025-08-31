@@ -30,6 +30,13 @@ logger = logging.getLogger(__name__)
 # Global stop event for threads
 stop_event = threading.Event()
 
+# Global message queue for thread-safe communication
+message_queue = queue.Queue()
+status_queue = queue.Queue()
+
+# Global flag for UI refresh
+ui_refresh_needed = threading.Event()
+
 class VoiceLiveConnection:
     def __init__(self, url: str, headers: dict) -> None:
         self._url = url
@@ -186,11 +193,18 @@ class AudioPlayerAsync:
 def listen_and_send_audio(connection: VoiceLiveConnection) -> None:
     """Continuously listen to audio and send to API"""
     logger.info("Starting continuous audio stream...")
-
-    stream = sd.InputStream(channels=1, samplerate=AUDIO_SAMPLE_RATE, dtype="int16")
+    
     try:
+        # List available audio devices for debugging
+        logger.info(f"Available audio devices: {sd.query_devices()}")
+        
+        stream = sd.InputStream(channels=1, samplerate=AUDIO_SAMPLE_RATE, dtype="int16")
         stream.start()
+        logger.info("Audio input stream started successfully")
+        
         read_size = int(AUDIO_SAMPLE_RATE * 0.02)  # 20ms chunks
+        audio_sent_count = 0
+        
         while not stop_event.is_set():
             if stream.read_available >= read_size:
                 data, _ = stream.read(read_size)
@@ -198,13 +212,21 @@ def listen_and_send_audio(connection: VoiceLiveConnection) -> None:
                 param = {"type": "input_audio_buffer.append", "audio": audio, "event_id": ""}
                 data_json = json.dumps(param)
                 connection.send(data_json)
+                audio_sent_count += 1
+                
+                # Log every 100 audio chunks to confirm audio is being sent
+                if audio_sent_count % 100 == 0:
+                    logger.info(f"Sent {audio_sent_count} audio chunks to API")
             else:
                 time.sleep(0.001)  # Small sleep to prevent busy waiting
+                
     except Exception as e:
         logger.error(f"Audio stream interrupted. {e}")
+        logger.error(f"Exception details: {traceback.format_exc()}")
     finally:
-        stream.stop()
-        stream.close()
+        if 'stream' in locals():
+            stream.stop()
+            stream.close()
         logger.info("Audio stream closed.")
 
 def receive_audio_and_playback(connection: VoiceLiveConnection) -> None:
@@ -223,41 +245,82 @@ def receive_audio_and_playback(connection: VoiceLiveConnection) -> None:
             try:
                 event = json.loads(raw_event)
                 event_type = event.get("type")
+                print(f"[DEBUG] Received event: {event_type}")  # Debug all events
 
                 if event_type == "session.created":
                     session = event.get("session")
                     logger.info(f"Session created: {session.get('id')}")
-                    # Update UI
+                    print(f"[DEBUG] Session created: {session.get('id')}")  # Direct console output
+                    # Add to session state directly with lock
                     if 'messages' not in st.session_state:
                         st.session_state.messages = []
-                    st.session_state.messages.append({"type": "system", "content": f"Connected - Session: {session.get('id')}"})
+                    st.session_state.messages.append({
+                        "type": "system", 
+                        "content": f"🟢 Connected - Session: {session.get('id')[:8]}...",
+                        "timestamp": datetime.now().strftime("%H:%M:%S")
+                    })
+                    print(f"[DEBUG] Added connection message. Total messages: {len(st.session_state.messages)}")
 
                 elif event_type == "conversation.item.input_audio_transcription.completed":
                     user_transcript = event.get("transcript", "")
                     if user_transcript:
-                        # Update UI with user input
+                        print(f"[DEBUG] User transcript received: {user_transcript}")  # Direct console output
+                        # Add to session state directly
                         if 'messages' not in st.session_state:
                             st.session_state.messages = []
-                        st.session_state.messages.append({"type": "user", "content": user_transcript})
+                        st.session_state.messages.append({
+                            "type": "user", 
+                            "content": user_transcript,
+                            "timestamp": datetime.now().strftime("%H:%M:%S")
+                        })
+                        st.session_state.user_speaking = False
+                        print(f"[DEBUG] Added user message. Total messages: {len(st.session_state.messages)}")
                         logger.info(f"User said: {user_transcript}")
+                        # Try to trigger UI refresh - this may not work from background thread
+                        try:
+                            st.rerun()
+                        except:
+                            # Set flag for main thread to check
+                            ui_refresh_needed.set()
 
-                elif event_type == "response.text.done":
-                    agent_text = event.get("text", "")
-                    if agent_text:
-                        # Update UI with agent response
-                        if 'messages' not in st.session_state:
-                            st.session_state.messages = []
-                        st.session_state.messages.append({"type": "assistant", "content": agent_text})
-                        logger.info(f"Agent text: {agent_text}")
+                elif event_type == "response.audio_transcript.delta":
+                    transcript_delta = event.get("delta", "")
+                    if transcript_delta:
+                        # Build up the assistant's response incrementally
+                        if not hasattr(st.session_state, 'current_assistant_response'):
+                            st.session_state.current_assistant_response = ""
+                        st.session_state.current_assistant_response += transcript_delta
+                        print(f"[DEBUG] Assistant transcript delta: {transcript_delta}")
 
                 elif event_type == "response.audio_transcript.done":
-                    agent_audio = event.get("transcript", "")
-                    if agent_audio:
-                        logger.info(f"Agent audio transcript: {agent_audio}")
+                    # Assistant has finished speaking, save the complete response
+                    if hasattr(st.session_state, 'current_assistant_response') and st.session_state.current_assistant_response:
+                        print(f"[DEBUG] Assistant complete response: {st.session_state.current_assistant_response}")
+                        if 'messages' not in st.session_state:
+                            st.session_state.messages = []
+                        st.session_state.messages.append({
+                            "type": "assistant", 
+                            "content": st.session_state.current_assistant_response,
+                            "timestamp": datetime.now().strftime("%H:%M:%S")
+                        })
+                        print(f"[DEBUG] Added complete assistant message. Total messages: {len(st.session_state.messages)}")
+                        # Clear the current response buffer
+                        st.session_state.current_assistant_response = ""
+                        st.session_state.assistant_responding = False
+                        # Try to trigger UI refresh - this may not work from background thread
+                        try:
+                            st.rerun()
+                        except:
+                            # Set flag for main thread to check
+                            ui_refresh_needed.set()
 
                 elif event_type == "response.created":
                     current_response_id = event.get("response", {}).get("id")
                     logger.info(f"New response created: {current_response_id}")
+                    print(f"[DEBUG] Response created: {current_response_id}")
+                    st.session_state.assistant_responding = True
+                    # Initialize the response buffer
+                    st.session_state.current_assistant_response = ""
 
                 elif event_type == "response.audio.delta":
                     response_id = event.get("response_id")
@@ -276,8 +339,31 @@ def receive_audio_and_playback(connection: VoiceLiveConnection) -> None:
                         logger.debug(f"Received audio data of length: {len(bytes_data)}")
                         audio_player.add_data(bytes_data)
 
+                elif event_type == "session.updated":
+                    print("[DEBUG] Session updated")
+                    logger.info("Session configuration updated")
+
+                elif event_type == "input_audio_buffer.committed":
+                    print("[DEBUG] Audio buffer committed")
+                    logger.info("User audio committed for processing")
+
+                elif event_type == "conversation.item.created":
+                    print("[DEBUG] Conversation item created")
+                    logger.info("New conversation item created")
+
+                elif event_type == "response.output_item.added":
+                    print("[DEBUG] Response output item added")
+                    logger.info("Response output item added")
+
+                elif event_type == "response.content_part.added":
+                    print("[DEBUG] Response content part added")
+                    logger.info("Response content part added")
+
                 elif event_type == "input_audio_buffer.speech_started":
                     logger.info("Speech started - stopping playback and cancelling response")
+                    print("[DEBUG] Speech started detected")  # Direct console output
+                    st.session_state.user_speaking = True
+                    st.session_state.assistant_responding = False
                     audio_player.stop()
                     current_response_id = None  # Clear current response tracking
                     # Cancel any ongoing response to prevent dual audio
@@ -287,10 +373,15 @@ def receive_audio_and_playback(connection: VoiceLiveConnection) -> None:
                     }
                     connection.send(json.dumps(cancel_response))
 
-                elif event_type == "response.cancelled":
-                    logger.info("Response cancelled successfully")
-                    audio_player.stop()  # Ensure playback is stopped
-                    current_response_id = None  # Clear response tracking
+                elif event_type == "input_audio_buffer.speech_stopped":
+                    logger.info("Speech stopped - user finished speaking")
+                    print("[DEBUG] Speech stopped detected")
+                    st.session_state.user_speaking = False
+
+                elif event_type == "response.audio.done":
+                    logger.info("Assistant finished speaking")
+                    print("[DEBUG] Assistant audio done")
+                    st.session_state.assistant_responding = False
 
                 elif event_type == "error":
                     error_details = event.get("error", {})
@@ -300,7 +391,11 @@ def receive_audio_and_playback(connection: VoiceLiveConnection) -> None:
                     logger.error(f"API Error: Type={error_type}, Code={error_code}, Message={error_message}")
                     if 'messages' not in st.session_state:
                         st.session_state.messages = []
-                    st.session_state.messages.append({"type": "error", "content": f"Error: {error_message}"})
+                    st.session_state.messages.append({
+                        "type": "system", 
+                        "content": f"⚠️ Error: {error_message}",
+                        "timestamp": datetime.now().strftime("%H:%M:%S")
+                    })
 
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON event: {e}")
@@ -311,6 +406,29 @@ def receive_audio_and_playback(connection: VoiceLiveConnection) -> None:
     finally:
         audio_player.terminate()
         logger.info("Playback done.")
+
+def process_message_queues():
+    """Process messages and status updates from background threads"""
+    # Process new messages
+    while not message_queue.empty():
+        try:
+            message = message_queue.get_nowait()
+            if 'messages' not in st.session_state:
+                st.session_state.messages = []
+            st.session_state.messages.append(message)
+        except queue.Empty:
+            break
+    
+    # Process status updates
+    while not status_queue.empty():
+        try:
+            status_key, status_value = status_queue.get_nowait()
+            if status_key == "user_speaking":
+                st.session_state.user_speaking = status_value
+            elif status_key == "assistant_responding":
+                st.session_state.assistant_responding = status_value
+        except queue.Empty:
+            break
 
 def main():
     # Page configuration
@@ -366,27 +484,135 @@ def main():
         font-size: 1.2rem;
         margin: 1rem 0;
     }
+    .chat-container {
+        max-height: 400px;
+        overflow-y: auto;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 15px;
+        margin: 20px 0;
+        border: 1px solid #e9ecef;
+    }
     .message-user {
-        background-color: #e3f2fd;
-        padding: 10px;
-        border-radius: 10px;
-        margin: 5px 0;
-        border-left: 4px solid #2196F3;
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 20px 20px 5px 20px;
+        margin: 10px 0 10px 50px;
+        box-shadow: 0 3px 10px rgba(0,123,255,0.3);
+        position: relative;
+        animation: slideInRight 0.3s ease-out;
+    }
+    .message-user::before {
+        content: "👤";
+        position: absolute;
+        left: -40px;
+        top: 10px;
+        font-size: 24px;
+        background: white;
+        border-radius: 50%;
+        width: 35px;
+        height: 35px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     .message-assistant {
-        background-color: #f3e5f5;
-        padding: 10px;
-        border-radius: 10px;
-        margin: 5px 0;
-        border-left: 4px solid #9C27B0;
+        background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 20px 20px 20px 5px;
+        margin: 10px 50px 10px 0;
+        box-shadow: 0 3px 10px rgba(40,167,69,0.3);
+        position: relative;
+        animation: slideInLeft 0.3s ease-out;
+    }
+    .message-assistant::before {
+        content: "🤖";
+        position: absolute;
+        right: -40px;
+        top: 10px;
+        font-size: 24px;
+        background: white;
+        border-radius: 50%;
+        width: 35px;
+        height: 35px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     .message-system {
-        background-color: #f5f5f5;
-        padding: 5px;
-        border-radius: 5px;
-        margin: 3px 0;
+        background-color: #6c757d;
+        color: white;
+        padding: 8px 15px;
+        border-radius: 15px;
+        margin: 5px auto;
         font-style: italic;
-        color: #666;
+        font-size: 0.9rem;
+        text-align: center;
+        max-width: 300px;
+        opacity: 0.8;
+    }
+    .message-timestamp {
+        font-size: 0.7rem;
+        opacity: 0.7;
+        margin-top: 5px;
+    }
+    .message-speaking {
+        border: 2px solid #ffc107;
+        animation: speaking 1s infinite;
+    }
+    .message-typing {
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 20px 20px 20px 5px;
+        margin: 10px 50px 10px 0;
+        position: relative;
+        animation: typing 1.5s infinite;
+    }
+    .message-typing::before {
+        content: "🤖";
+        position: absolute;
+        right: -40px;
+        top: 10px;
+        font-size: 24px;
+        background: white;
+        border-radius: 50%;
+        width: 35px;
+        height: 35px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    @keyframes slideInRight {
+        from { transform: translateX(50px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideInLeft {
+        from { transform: translateX(-50px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes speaking {
+        0% { box-shadow: 0 3px 10px rgba(255,193,7,0.3); }
+        50% { box-shadow: 0 3px 20px rgba(255,193,7,0.6); }
+        100% { box-shadow: 0 3px 10px rgba(255,193,7,0.3); }
+    }
+    @keyframes typing {
+        0%, 60%, 100% { opacity: 1; }
+        30% { opacity: 0.7; }
+    }
+    .typing-dots {
+        animation: typingDots 1.4s infinite;
+    }
+    @keyframes typingDots {
+        0%, 20% { content: ""; }
+        40% { content: "."; }
+        60% { content: ".."; }
+        80%, 100% { content: "..."; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -403,6 +629,10 @@ def main():
         st.session_state.messages = []
     if 'audio_threads' not in st.session_state:
         st.session_state.audio_threads = []
+    if 'user_speaking' not in st.session_state:
+        st.session_state.user_speaking = False
+    if 'assistant_responding' not in st.session_state:
+        st.session_state.assistant_responding = False
     
     # Connection setup
     if st.session_state.connection is None:
@@ -525,16 +755,141 @@ def main():
         
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Display messages
-    if st.session_state.messages:
-        st.markdown("### 💬 Conversation")
-        for msg in st.session_state.messages[-20:]:  # Show last 20 messages
-            if msg["type"] == "user":
-                st.markdown(f'<div class="message-user"><strong>You:</strong> {msg["content"]}</div>', unsafe_allow_html=True)
-            elif msg["type"] == "assistant":
-                st.markdown(f'<div class="message-assistant"><strong>Assistant:</strong> {msg["content"]}</div>', unsafe_allow_html=True)
-            elif msg["type"] == "system":
-                st.markdown(f'<div class="message-system">{msg["content"]}</div>', unsafe_allow_html=True)
+    # Display conversation prominently
+    st.markdown("### 💬 Live Conversation")
+    
+    # Add a refresh button for real-time updates
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("🔄 Refresh Chat", help="Click to see latest messages"):
+            st.rerun()
+    
+    # Add a simple test button to add a message manually
+    with col1:
+        if st.button("🧪 Test Message", help="Add a test message"):
+            if 'messages' not in st.session_state:
+                st.session_state.messages = []
+            st.session_state.messages.append({
+                "type": "system", 
+                "content": f"Test message at {datetime.now().strftime('%H:%M:%S')}",
+                "timestamp": datetime.now().strftime("%H:%M:%S")
+            })
+            st.rerun()
+    
+    # Debug info
+    with st.expander("🔧 Debug Info", expanded=False):
+        st.write(f"Messages in session: {len(st.session_state.messages)}")
+        st.write(f"User speaking: {st.session_state.user_speaking}")
+        st.write(f"Assistant responding: {st.session_state.assistant_responding}")
+        st.write(f"Connection active: {st.session_state.connection is not None}")
+        st.write(f"Streaming active: {st.session_state.streaming_active}")
+        st.write(f"Audio threads count: {len(st.session_state.audio_threads)}")
+        
+        # Show thread status
+        if st.session_state.audio_threads:
+            for i, thread in enumerate(st.session_state.audio_threads):
+                st.write(f"Thread {i+1} alive: {thread.is_alive()}")
+        
+        if st.session_state.messages:
+            st.write("Last message:", st.session_state.messages[-1])
+    
+    # Check if UI refresh is needed (from background threads)
+    if ui_refresh_needed.is_set():
+        ui_refresh_needed.clear()
+        st.rerun()
+    
+    # Create a container for the chat
+    chat_container = st.container()
+    with chat_container:
+        if st.session_state.messages:
+            st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+            
+            for i, msg in enumerate(st.session_state.messages[-15:]):  # Show last 15 messages
+                timestamp = msg.get("timestamp", datetime.now().strftime("%H:%M:%S"))
+                
+                if msg["type"] == "user":
+                    speaking_class = "message-speaking" if st.session_state.user_speaking else ""
+                    st.markdown(f'''
+                    <div class="message-user {speaking_class}">
+                        <div><strong>You</strong></div>
+                        <div>{msg["content"]}</div>
+                        <div class="message-timestamp">{timestamp}</div>
+                    </div>
+                    ''', unsafe_allow_html=True)
+                    
+                elif msg["type"] == "assistant":
+                    responding_class = "message-speaking" if st.session_state.assistant_responding else ""
+                    st.markdown(f'''
+                    <div class="message-assistant {responding_class}">
+                        <div><strong>Contoso Assistant</strong></div>
+                        <div>{msg["content"]}</div>
+                        <div class="message-timestamp">{timestamp}</div>
+                    </div>
+                    ''', unsafe_allow_html=True)
+                    
+                elif msg["type"] == "system":
+                    st.markdown(f'''
+                    <div class="message-system">
+                        {msg["content"]}
+                    </div>
+                    ''', unsafe_allow_html=True)
+            
+            # Show typing indicator when assistant is thinking
+            if st.session_state.assistant_responding and not any(msg["type"] == "assistant" for msg in st.session_state.messages[-1:]):
+                st.markdown(f'''
+                <div class="message-typing">
+                    <div><strong>Contoso Assistant</strong></div>
+                    <div>Thinking<span class="typing-dots">...</span></div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Auto-scroll to bottom script
+            st.markdown('''
+            <script>
+            const chatContainer = document.querySelector('.chat-container');
+            if (chatContainer) {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+            </script>
+            ''', unsafe_allow_html=True)
+        else:
+            st.markdown('''
+            <div class="chat-container">
+                <div style="text-align: center; color: #6c757d; padding: 50px;">
+                    <h4>🎤 Start a conversation</h4>
+                    <p>Click the microphone above and start speaking!</p>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
+    
+    # Add dynamic status indicators
+    if st.session_state.streaming_active:
+        if st.session_state.user_speaking:
+            st.markdown('''
+            <div style="text-align: center; padding: 10px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border-radius: 10px; margin: 10px 0; animation: pulse 1s infinite;">
+                <strong>🎤 YOU ARE SPEAKING</strong> - I'm listening...
+            </div>
+            ''', unsafe_allow_html=True)
+        elif st.session_state.assistant_responding:
+            st.markdown('''
+            <div style="text-align: center; padding: 10px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; border-radius: 10px; margin: 10px 0; animation: pulse 1s infinite;">
+                <strong>🤖 ASSISTANT RESPONDING</strong> - Speaking now...
+            </div>
+            ''', unsafe_allow_html=True)
+        else:
+            st.markdown('''
+            <div style="text-align: center; padding: 10px; background: linear-gradient(135deg, #6f42c1 0%, #563d7c 100%); color: white; border-radius: 10px; margin: 10px 0;">
+                <strong>🔴 LIVE</strong> - Ready to listen...
+            </div>
+            ''', unsafe_allow_html=True)
+    else:
+        st.markdown('''
+        <div style="text-align: center; padding: 10px; background: linear-gradient(135deg, #6c757d 0%, #495057 100%); color: white; border-radius: 10px; margin: 10px 0;">
+            <strong>⏸️ OFFLINE</strong> - Click microphone to start
+        </div>
+        ''', unsafe_allow_html=True)
     
     # Instructions
     with st.expander("ℹ️ How to use"):
@@ -548,6 +903,34 @@ def main():
         
         **Note:** The microphone stays active continuously once started, just like the original voice agent!
         """)
+    
+    # Add a periodic refresh to catch UI updates from background threads
+    # This JavaScript will check for updates every 1 second
+    st.markdown(f"""
+    <script>
+    // Check if messages have been updated and refresh if needed
+    let messageCount = {len(st.session_state.messages) if st.session_state.messages else 0};
+    let lastKnownCount = sessionStorage.getItem('lastMessageCount') || 0;
+    
+    if (messageCount != lastKnownCount) {{
+        sessionStorage.setItem('lastMessageCount', messageCount);
+        // Small delay to allow message processing to complete
+        setTimeout(function() {{
+            window.location.reload();
+        }}, 500);
+    }}
+    
+    // Set up periodic check for new messages
+    setInterval(function() {{
+        let currentCount = {len(st.session_state.messages) if st.session_state.messages else 0};
+        let storedCount = sessionStorage.getItem('lastMessageCount') || 0;
+        if (currentCount != storedCount) {{
+            sessionStorage.setItem('lastMessageCount', currentCount);
+            window.location.reload();
+        }}
+    }}, 1000);
+    </script>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
