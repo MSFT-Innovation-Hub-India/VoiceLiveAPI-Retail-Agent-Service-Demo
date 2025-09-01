@@ -55,6 +55,11 @@ This system prompt configures the agent to:
 - **Confirm order details** before placing orders
 - **Verify shipping addresses** before creating shipments
 
+See the screenshot of the Agent existing in Azure AI Foundry Agent Service
+
+![alt text](./images/FoundryAgent.png)
+
+
 Environment variables (in a `.env` at repo root). Start by copying the template:
 
 ```powershell
