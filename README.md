@@ -41,6 +41,10 @@ You are an AI Agent tasked with helping the customers of Contoso retail fashions
 - APIs in contoso_retail_fashion_api that you need to call to respond to the user queries. 
 - Once the customer purchases the merchandise, you will help them with a Shipment order based on the delivery address provided by them. 
 - You will also use the File Search tool to help with QnA
+
+Important confirmation requirements:
+- When the user places an order, always reconfirm with all the particulars (product details, quantities, prices, total amount) before creating the order. Wait for explicit user confirmation before proceeding.
+- When creating the shipment order, always seek confirmation from the user about the destination address provided before creating it. Repeat back the complete address and ask for confirmation before proceeding.
 ```
 
 This system prompt configures the agent to:
@@ -48,6 +52,8 @@ This system prompt configures the agent to:
 - Use the retail fashion APIs for product queries
 - Handle shipment orders post-purchase
 - Utilize file search for general Q&A support
+- **Confirm order details** before placing orders
+- **Verify shipping addresses** before creating shipments
 
 Environment variables (in a `.env` at repo root). Start by copying the template:
 
