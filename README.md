@@ -32,6 +32,23 @@ Optimized for hands-free, multi-turn conversations with live transcripts and spo
 - An Azure AI Foundry project/agent configured for Voice Live
 - Ability to obtain AAD tokens via DefaultAzureCredential (e.g., Azure CLI sign-in)
 
+## 🤖 AI Agent Configuration
+
+When setting up your AI Agent in Azure AI Foundry, use the following system prompt:
+
+```
+You are an AI Agent tasked with helping the customers of Contoso retail fashions with their shopping requirements. You have access to the following:
+- APIs in contoso_retail_fashion_api that you need to call to respond to the user queries. 
+- Once the customer purchases the merchandise, you will help them with a Shipment order based on the delivery address provided by them. 
+- You will also use the File Search tool to help with QnA
+```
+
+This system prompt configures the agent to:
+- Act as a Contoso retail fashion assistant
+- Use the retail fashion APIs for product queries
+- Handle shipment orders post-purchase
+- Utilize file search for general Q&A support
+
 Environment variables (in a `.env` at repo root). Start by copying the template:
 
 ```powershell

@@ -221,13 +221,15 @@ async def handle_websocket_message(message_data: str):
                 connection_state['user_speaking'] = True
                 await cl.Message(content="🎤 **Listening...**", author="System").send()
             # Cancel any ongoing response to prevent overlap and clear pending audio
+            
+            audio_player.clear()
             try:
                 if connection_state.get('connection'):
                     connection_state['connection'].send_message({
                         "type": "response.cancel",
                         "event_id": str(uuid.uuid4())
                     })
-                audio_player.clear()
+                ## audio_player.clear() ## moved this up so that it clears the audio buffer before sending the cancel message
             except Exception as e:
                 logger.debug(f"Failed to cancel response: {e}")
 
@@ -256,20 +258,36 @@ async def handle_websocket_message(message_data: str):
             print(f"[DEBUG] Response created: {current_response_id}")
             connection_state['assistant_responding'] = True
             cl.user_session.set("current_assistant_response", "")
+            # Create a new message for streaming updates
+            streaming_msg = cl.Message(content=f"{ASSISTANT_PREFIX} ", author="assistant")
+            await streaming_msg.send()
+            cl.user_session.set("current_streaming_message", streaming_msg)
 
         elif event_type in ("response.audio_transcript.delta", "response.output_text.delta", "response.text.delta"):
             delta = event.get("delta", "")
             if delta:
                 current_response = cl.user_session.get("current_assistant_response", "")
-                cl.user_session.set("current_assistant_response", current_response + delta)
+                updated_response = current_response + delta
+                cl.user_session.set("current_assistant_response", updated_response)
                 print(f"[DEBUG] Assistant delta: {delta}")
+                
+                # Update the streaming message in real-time
+                streaming_msg = cl.user_session.get("current_streaming_message")
+                if streaming_msg:
+                    streaming_msg.content = f"{ASSISTANT_PREFIX} {updated_response}"
+                    await streaming_msg.update()
 
         elif event_type in ("response.audio_transcript.done", "response.output_text.done", "response.text.done"):
             complete_response = cl.user_session.get("current_assistant_response", "")
             if complete_response:
                 print(f"[DEBUG] Assistant complete response: {complete_response}")
-                await cl.Message(content=f"{ASSISTANT_PREFIX} {complete_response}").send()
+                # Final update to the streaming message
+                streaming_msg = cl.user_session.get("current_streaming_message")
+                if streaming_msg:
+                    streaming_msg.content = f"{ASSISTANT_PREFIX} {complete_response}"
+                    await streaming_msg.update()
             cl.user_session.set("current_assistant_response", "")
+            cl.user_session.set("current_streaming_message", None)
             connection_state['assistant_responding'] = False
 
         elif event_type == "response.audio.delta":
@@ -292,12 +310,14 @@ async def handle_websocket_message(message_data: str):
             print(f"[DEBUG] {event_type}")
             if event_type == "response.done":
                 connection_state['assistant_responding'] = False
+                cl.user_session.set("current_streaming_message", None)
 
         elif event_type == "error":
             err = event.get("error") or event
             logger.warning(f"Voice Live error event: {err}")
             print(f"[DEBUG] Error event: {json.dumps(err)[:500]}")
             connection_state['assistant_responding'] = False
+            cl.user_session.set("current_streaming_message", None)
 
         else:
             print(f"[DEBUG] Unhandled event type: {event_type}")
@@ -564,6 +584,7 @@ async def interrupt_assistant():
         audio_player.clear()
         connection_state['assistant_responding'] = False
         cl.user_session.set("current_assistant_response", "")
+        cl.user_session.set("current_streaming_message", None)
     except Exception as e:
         logger.debug(f"Interrupt failed: {e}")
 async def send_controls():
