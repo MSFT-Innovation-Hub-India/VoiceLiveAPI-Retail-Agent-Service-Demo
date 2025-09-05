@@ -30,7 +30,7 @@ async def init_rtclient():
             cl.user_session.set("conversation_state", conversation_state)
             
             await cl.Message(
-                content="🎤 Listening...",
+                content="...",
                 author="user", 
                 type="user_message",
                 id=user_transcript_msg_id,
@@ -93,7 +93,7 @@ async def init_rtclient():
                         print(f"Finalizing pending user message {msg_id} before assistant response")
                         # Update with a temporary message if transcript isn't ready yet
                         await cl.Message(
-                            content="[Voice input - processing transcript...]",
+                            content="...",
                             author="user",
                             type="user_message",
                             id=msg_id,
@@ -141,7 +141,7 @@ async def init_rtclient():
             else:
                 # If transcript is empty, update with a fallback message
                 await cl.Message(
-                    content="[Voice input received]", 
+                    content="...", 
                     author="user", 
                     type="user_message",
                     id=msg_id
@@ -173,7 +173,7 @@ async def init_rtclient():
         if conversation_state.get("user_message_pending", False):
             msg_id = user_transcript_ref[0]
             await cl.Message(
-                content="🔄 Processing...",
+                content="...",
                 author="user",
                 type="user_message", 
                 id=msg_id,
@@ -255,6 +255,7 @@ async def on_audio_start():
 @cl.on_audio_chunk
 async def on_audio_chunk(chunk: cl.InputAudioChunk):
     openai_realtime: VoiceLiveClient = cl.user_session.get("openai_realtime")
+
     try:
         if openai_realtime and openai_realtime.is_connected():
             await openai_realtime.append_input_audio(chunk.data)
