@@ -1,4 +1,20 @@
-# Contoso Retail Assistant — Voice + Chat (Azure Voice Live API + Chainlit)
+# Contoso Retail A## 🏗️ Architecture (Modular Design)
+
+This application uses a modular architecture for better maintainability and reusability:
+
+- **`app.py`** - Main Chainlit application and UI orchestration
+- **`azure_voice_client.py`** - Azure Voice Live API client with WebSocket handling
+- **`audio_manager.py`** - Audio recording and playback management
+- **`config.py`** - Configuration management and Azure authentication
+
+### Key Features
+- **Modular Components**: Each module has a single responsibility
+- **Event-Driven Architecture**: Clean callback system for API events
+- **Thread-Safe Audio**: Robust audio handling with buffering
+- **Azure AD Auth**: Uses DefaultAzureCredential with `https://ai.azure.com/.default` scope
+- **Voice Optimization**: 24kHz audio, semantic VAD, noise suppression, echo cancellation
+- **Assistant Interruption**: Voice or text input cancels current response
+- **Real-time UI**: Live transcripts and streaming responses— Voice + Chat (Azure Voice Live API + Chainlit)
 
 An interactive retail assistant that supports natural voice and text conversations using Azure Voice Live API. Built with Chainlit for responsive, real-time UI and robust audio handling.
 
@@ -78,19 +94,19 @@ Sign in for AAD token (one of):
 
 ## 🚀 Setup & Run
 
-Install dependencies:
+### 1. Install Dependencies
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-Start the app:
+### 2. Start the Application
 
 ```powershell
-chainlit run chainlit_voice_app.py
+chainlit run app.py
 ```
 
-Open the Chainlit URL shown in the terminal.
+Open the Chainlit URL shown in the terminal (typically http://localhost:8000).
 
 ## 🎤 How to use
 
