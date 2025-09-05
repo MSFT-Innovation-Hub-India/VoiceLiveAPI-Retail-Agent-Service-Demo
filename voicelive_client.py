@@ -12,6 +12,7 @@ import uuid
 import os
 from dotenv import load_dotenv
 import websockets
+
 # Load environment variables
 load_dotenv("./.env", override=True)
 
@@ -19,6 +20,7 @@ endpoint = os.getenv("AZURE_VOICE_LIVE_ENDPOINT")
 api_version = os.getenv("AZURE_VOICE_LIVE_API_VERSION", "2025-05-01-preview")
 project_name = os.getenv("AI_FOUNDRY_PROJECT_NAME")
 agent_id = os.getenv("AI_FOUNDRY_AGENT_ID")
+
 
 class VoiceLiveClient:
 
@@ -46,6 +48,7 @@ class VoiceLiveClient:
                 "type": "azure-standard",
                 "temperature": 0.8,
             },
+            "input_audio_transcription": {"model": "azure-speech", "language": "en-IN, hi-IN"},
         }
         self.response_config = {"modalities": ["text", "audio"]}
 
@@ -67,7 +70,7 @@ class VoiceLiveClient:
 
     def log(self, *args):
         logger.debug(f"[Websocket/{datetime.datetime.utcnow().isoformat()}]", *args)
-        
+
     def get_azure_token(self) -> str:
         """Get Azure access token using DefaultAzureCredential."""
         try:
@@ -78,7 +81,6 @@ class VoiceLiveClient:
         except Exception as e:
             logger.error(f"Failed to get Azure token: {e}")
             raise
-
 
     def get_websocket_url(self, access_token: str) -> str:
         """Generate WebSocket URL for Voice Live API."""
@@ -93,8 +95,8 @@ class VoiceLiveClient:
         """Connects the client using a WS Connection to the Realtime API."""
         if self.is_connected():
             # raise Exception("Already connected")
-            self.log("Already connected")            # Get access token
-        
+            self.log("Already connected")  # Get access token
+
         access_token = self.get_azure_token()
         # Build WebSocket URL and headers
         ws_url = self.get_websocket_url(access_token)
@@ -185,6 +187,7 @@ class VoiceLiveClient:
                 array_buffer = base64_to_array_buffer(delta)
                 append_values = array_buffer.tobytes()
                 _event = {"audio": append_values}
+                # print(f"🎵 Audio chunk received: {len(append_values)} bytes")
                 # send event to chainlit UI to play this audio
                 self.dispatch("conversation.updated", _event)
             elif event["type"] == "response.audio.done":
@@ -256,4 +259,3 @@ class VoiceLiveClient:
                     "audio": array_buffer_to_base64(np.array(array_buffer)),
                 },
             )
-
