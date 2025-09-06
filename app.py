@@ -28,9 +28,18 @@ async def init_rtclient():
     async def handle_conversation_interrupt(event):
         """This applies when the user interrupts during an audio playback.
         This stops the audio playback to listen to what the user has to say"""
-        # print("event in conversation interrupted", event)
+        print("🔄 Conversation interrupted - stopping audio playback")
         cl.user_session.set("track_id", str(uuid4()))
         await cl.context.emitter.send_audio_interrupt()
+        
+        # Reset transcript tracking to prevent duplicate messages after interruption
+        # Keep the current transcript state but mark that we're in an interrupted state
+        current_transcript = cl.user_session.get("transcript")
+        if current_transcript and current_transcript[0] != "1":
+            print(f"Maintaining transcript state for message ID: {current_transcript[0]}")
+            # Don't reset the transcript state - let the existing message continue to be updated
+        else:
+            print("No active transcript to maintain")
 
     async def handle_response_audio_transcript_updated(event):
         """Used to populate the chat context with transcription once an audio transcript of the response is done."""
@@ -52,6 +61,7 @@ async def init_rtclient():
                     cl.user_session.set("transcript", transcript_ref)
                     # appending the delta transcript from audio to the previous transcript
                     # using the message id as the key to update the message in the chat window
+                    print(f"📝 Updating existing message {item_id} with delta: {delta[:30]}...")
                     await cl.Message(
                         content=_transcript,
                         author="assistant",
@@ -60,7 +70,7 @@ async def init_rtclient():
                     ).update()
                 else:
                     # New assistant response starting
-                    print(f"Starting new assistant response with ID: {item_id}")
+                    print(f"🆕 Starting new assistant response with ID: {item_id} (previous: {transcript_ref[0]})")
 
                     # now populate the assistant response transcript in the chat interface
                     transcript_ref = [item_id, delta]
