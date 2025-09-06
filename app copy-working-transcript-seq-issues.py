@@ -8,7 +8,7 @@ async def init_rtclient():
     openai_realtime = VoiceLiveClient()
     cl.user_session.set("track_id", str(uuid4()))
     cl.user_session.set("transcript", ["1", "-"])
-    cl.user_session.set("listening_indicator_id", None)  # Track listening indicator
+    cl.user_session.set("user_input_transcript", ["1", ""])
 
     async def handle_conversation_updated(event):
         """Used to play the response audio chunks as they are received from the server."""
@@ -74,22 +74,21 @@ async def init_rtclient():
                     print(
                         f"Created new assistant message {item_id} with initial content: {delta[:50]}..."
                     )
-                    # Remove the listening indicator if it exists when assistant starts responding
-                    listening_indicator_id = cl.user_session.get("listening_indicator_id")
-                    if listening_indicator_id:
-                        try:
-                            await cl.Message(
-                                content="",
-                                author="user",
-                                type="user_message",
-                                id=listening_indicator_id,
-                            ).update()
-                            cl.user_session.set("listening_indicator_id", None)
-                            print(f"Removed listening indicator {listening_indicator_id}")
-                        except Exception as e:
-                            print(f"Error removing listening indicator: {e}")
-                    
-                    # No longer creating placeholder user messages here - will create them when transcript is ready
+                    # Create a new placeholder for user input transcript for the next user input, with an empty text
+                    # When the handle_user_input_transcript_done event fires, will update this message with the actual transcript
+                    user_transcript_msg_id = str(uuid4())
+                    print(
+                        f"Creating new user message placeholder with ID: {user_transcript_msg_id}"
+                    )
+                    cl.user_session.set(
+                        "user_input_transcript", [user_transcript_msg_id, ""]
+                    )
+                    await cl.Message(
+                        content="",
+                        author="user",
+                        type="user_message",
+                        id=user_transcript_msg_id,
+                    ).send()
 
         except Exception as e:
             print(f"Error handling conversation thread update: {e}")
@@ -97,38 +96,27 @@ async def init_rtclient():
 
     async def handle_user_input_transcript_done(event):
         """Used to populate the chat context with transcription once an audio transcript of user input is completed.
-        Creates the user message directly with the transcript content.
+        This updates the placeholder message that was created earlier.
         """
         transcript = event.get("transcript")
         print("Final user input transcript received:", transcript)
-        
-        # Remove any listening indicator first
-        listening_indicator_id = cl.user_session.get("listening_indicator_id")
-        if listening_indicator_id:
-            try:
-                await cl.Message(
-                    content="",
-                    author="user", 
-                    type="user_message",
-                    id=listening_indicator_id,
-                ).update()
-                cl.user_session.set("listening_indicator_id", None)
-                print(f"Removed listening indicator {listening_indicator_id}")
-            except Exception as e:
-                print(f"Error removing listening indicator: {e}")
-        
-        # Only create user message if we have actual transcript content
-        if transcript and transcript.strip():
-            user_msg_id = str(uuid4())
-            print(f"Creating user message with ID: {user_msg_id} and transcript: {transcript}")
+        msg_id = cl.user_session.get("user_input_transcript")[0]
+
+        # A placeholder message was created for the user input transcript earlier. updating the message with the actual transcript
+
+        if "1" != msg_id:
+            print(f"Updating user message placeholder created earlier having ID: {msg_id} with the transcript")
             await cl.Message(
-                content=transcript,
-                author="user",
-                type="user_message", 
-                id=user_msg_id
-            ).send()
+                content=transcript, author="user", type="user_message", id=msg_id
+            ).update()
         else:
-            print("No transcript content received, skipping user message creation")
+            print(
+                "Creating a user message placeholder with ID: {msg_id} and sending the message"
+            )
+            await cl.Message(
+                content=transcript, author="user", type="user_message", id=msg_id
+            ).send()
+        cl.user_session.set("user_input_transcript", [str(uuid4()), ""])
 
     openai_realtime.on("conversation.updated", handle_conversation_updated)
     openai_realtime.on("conversation.interrupted", handle_conversation_interrupt)
@@ -190,18 +178,6 @@ async def on_audio_start():
 
         await openai_realtime.connect()
         print("🔗 Connected to Voice Live API")
-        
-        # Create a listening indicator
-        listening_indicator_id = str(uuid4())
-        cl.user_session.set("listening_indicator_id", listening_indicator_id)
-        await cl.Message(
-            content="🎤 Listening...",
-            author="user",
-            type="user_message",
-            id=listening_indicator_id,
-        ).send()
-        print(f"Created listening indicator with ID: {listening_indicator_id}")
-        
         return True
     except Exception as e:
         print(f"❌ Failed to connect to Voice Live API: {e}")

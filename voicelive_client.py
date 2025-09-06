@@ -208,11 +208,11 @@ class VoiceLiveClient:
 
                 # Signal that user started speaking to create placeholder
                 _speech_event = {"type": "user_speech_started"}
-                self.dispatch("user.speech.started", _speech_event)
+                # self.dispatch("user.speech.started", _speech_event)
             elif event["type"] == "input_audio_buffer.speech_stopped":
                 # User stopped speaking - can update placeholder to show processing
                 _speech_event = {"type": "user_speech_stopped"}
-                self.dispatch("user.speech.stopped", _speech_event)
+                # self.dispatch("user.speech.stopped", _speech_event)
             elif event["type"] == "response.audio_transcript.delta":
                 # this event is received when the transcript of the server's audio response to the user has started to come in.
                 # send this to the UI to display the transcript in the chat window, even as the audio of the response gets played
