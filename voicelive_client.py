@@ -201,7 +201,7 @@ class VoiceLiveClient:
             elif event["type"] == "input_audio_buffer.speech_started":
                 # The server has detected speech input from the user. Hence use this event to signal the UI to stop playing any audio if playing one
                 # Also trigger creation of user message placeholder
-                # print("conversation interrupted.......")
+                print("conversation interrupted through new audio input .......")
                 _event = {"type": "conversation_interrupted"}
                 # signal the UI to stop playing audio
                 self.dispatch("conversation.interrupted", _event)

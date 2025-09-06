@@ -194,7 +194,7 @@ async def start():
     print("🚀 @cl.on_chat_start triggered - starting voice chat session")
     try:
         await cl.Message(
-            content="Hi, Welcome! You are now connected to Voice AI Assistant representing Contoso Retail Fashions. Click the microphone icon below to start talking!"
+            content="Hi, Welcome! You are now connected to Voice AI Assistant representing Contoso Retail Fashions. Please note that the conversation will be recorded for quality purposes. Click the microphone icon below to start talking!"
         ).send()
         print("✅ Welcome message sent")
         
