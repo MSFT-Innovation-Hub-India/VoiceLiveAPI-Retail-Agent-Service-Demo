@@ -32,14 +32,19 @@ async def init_rtclient():
         cl.user_session.set("track_id", str(uuid4()))
         await cl.context.emitter.send_audio_interrupt()
         
-        # Reset transcript tracking to prevent duplicate messages after interruption
-        # Keep the current transcript state but mark that we're in an interrupted state
-        current_transcript = cl.user_session.get("transcript")
-        if current_transcript and current_transcript[0] != "1":
-            print(f"Maintaining transcript state for message ID: {current_transcript[0]}")
-            # Don't reset the transcript state - let the existing message continue to be updated
-        else:
-            print("No active transcript to maintain")
+        # Reset transcript tracking completely on interruption to prevent stale responses
+        print("Resetting transcript state due to interruption")
+        cl.user_session.set("transcript", ["1", "-"])
+        
+        # Clear any pending audio buffer to ensure fresh conversation state
+        openai_realtime: VoiceLiveClient = cl.user_session.get("openai_realtime")
+        if openai_realtime and openai_realtime.is_connected():
+            try:
+                # Clear the input audio buffer on the server side
+                await openai_realtime.clear_input_audio_buffer()
+                print("Cleared input audio buffer on server")
+            except Exception as e:
+                print(f"Error clearing input audio buffer: {e}")
 
     async def handle_response_audio_transcript_updated(event):
         """Used to populate the chat context with transcription once an audio transcript of the response is done."""
@@ -54,6 +59,16 @@ async def init_rtclient():
                 # print(
                 #     f"item_id in audio response transcript update is {item_id}, and the one in the session is {transcript_ref[0]}"
                 # )
+                
+                # Skip processing if this is a stale response (from before interruption)
+                if transcript_ref[0] == "1" and transcript_ref[1] == "-":
+                    # Fresh state - this is a new response
+                    pass
+                elif transcript_ref[0] != item_id and transcript_ref[0] != "1":
+                    # This might be a stale response from before interruption
+                    print(f"⚠️ Potential stale response detected. Current session item: {transcript_ref[0]}, received item: {item_id}")
+                    # Allow it to proceed but log it for debugging
+                
                 # identify if there is a new message or an update to an existing message (i.e. delta to an existing transcript)
                 if transcript_ref[0] == item_id:
                     _transcript = transcript_ref[1] + delta

@@ -259,3 +259,12 @@ class VoiceLiveClient:
                     "audio": array_buffer_to_base64(np.array(array_buffer)),
                 },
             )
+
+    async def clear_input_audio_buffer(self):
+        """
+        Clears the input audio buffer on the server side.
+        This is useful when conversation is interrupted to ensure fresh state.
+        """
+        if self.is_connected():
+            await self.send("input_audio_buffer.clear")
+            print("Input audio buffer cleared")
