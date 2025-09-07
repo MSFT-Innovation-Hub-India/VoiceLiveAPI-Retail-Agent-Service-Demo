@@ -207,7 +207,7 @@ class VoiceLiveModelClient:
             # when the user submits a query in the chat interface
             _event = {"type": "conversation_interrupted"}
             # signal the UI to stop playing audio
-            self.dispatch("conversation.interrupted", _event)
+            self.dispatch("conversation.message.interrupted", _event)
 
     async def update_session(self):
         """

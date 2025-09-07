@@ -31,7 +31,22 @@ async def init_rtclient():
         print("🔄 Conversation interrupted - stopping audio playback")
         cl.user_session.set("track_id", str(uuid4()))
         await cl.context.emitter.send_audio_interrupt()
+        user_transcript_msg_id = str(uuid4())
+        cl.user_session.set("user_input_transcript", [user_transcript_msg_id, ""])
+        await cl.Message(
+            content="",
+            author="user",
+            type="user_message",
+            id=user_transcript_msg_id,
+        ).send()
         
+    async def handle_conversation_message_interrupted(event):
+        """This applies when the user interrupts with a chat input.
+        This stops the audio playback to listen to what the user has to say"""
+        print("🔄 Conversation interrupted due to user chat message - stopping audio playback")
+        cl.user_session.set("track_id", str(uuid4()))
+
+
     async def handle_response_audio_transcript_updated(event):
         """Used to populate the chat context with transcription once an audio transcript of the response is done."""
         item_id = event.get("item_id")
@@ -39,7 +54,7 @@ async def init_rtclient():
         if delta:
             transcript_ref = cl.user_session.get("transcript")
             # print(f"item_id in delta is {item_id}, and the one in the session is {transcript_ref[0]}")
-            
+
             # identify if there is a new message or an update to an existing message (i.e. delta to an existing transcript)
             if transcript_ref[0] == item_id:
                 _transcript = transcript_ref[1] + delta
@@ -55,18 +70,7 @@ async def init_rtclient():
                 ).update()
             else:
                 transcript_ref = [item_id, delta]
-                
-                # create a placeholder message for the user input first
-                # we can set the actual message later when the server provides it
-                user_transcript_msg_id = str(uuid4())
-                cl.user_session.set("user_input_transcript", [user_transcript_msg_id,"" ])
-                await cl.Message(
-                    content="",
-                    author="user",
-                    type="user_message",
-                    id=user_transcript_msg_id,
-                ).send()
-                
+
                 # now populate the assistant response transcript in the chat interface
                 cl.user_session.set("transcript", transcript_ref)
                 await cl.Message(
@@ -76,8 +80,6 @@ async def init_rtclient():
                     id=item_id,
                 ).send()
 
-    
-
     async def handle_user_input_transcript_done(event):
         """Used to populate the chat context with transcription once an audio transcript of user input is completed.
         Creates the user message directly with the transcript content.
@@ -85,10 +87,12 @@ async def init_rtclient():
         transcript = event.get("transcript")
         msg_id = cl.user_session.get("user_input_transcript")[0]
         # await cl.Message(content=transcript, author="user", type="user_message").send()
-        
+
         # A placeholder message was created for the user input transcript earlier. updating the message with the actual transcript
-        await cl.Message(content=transcript, author="user", type="user_message",id=msg_id).update()
-        cl.user_session.set("user_input_transcript",[str(uuid4()),""])
+        await cl.Message(
+            content=transcript, author="user", type="user_message", id=msg_id
+        ).update()
+        cl.user_session.set("user_input_transcript", [str(uuid4()), ""])
 
     openai_realtime.on("conversation.updated", handle_conversation_updated)
     openai_realtime.on("conversation.interrupted", handle_conversation_interrupt)
@@ -98,6 +102,7 @@ async def init_rtclient():
     openai_realtime.on(
         "conversation.input.text.done", handle_user_input_transcript_done
     )
+    openai_realtime.on("conversation.message.interrupted", handle_conversation_message_interrupted)
     cl.user_session.set("openai_realtime", openai_realtime)
 
 
@@ -150,7 +155,7 @@ async def on_audio_start():
 
         await openai_realtime.connect()
         print("🔗 Connected to Voice Live API")
-        
+
         return True
     except Exception as e:
         print(f"❌ Failed to connect to Voice Live API: {e}")
