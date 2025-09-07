@@ -143,23 +143,34 @@ def perform_call_log_analysis(call_log: str) -> str:
 
     api_url = logic_app_url_call_log_analysis
     print("analyzing call log using Logic app.................")
+    print(f"DEBUG: Received call_log parameter: {call_log}")
+    print(f"DEBUG: call_log type: {type(call_log)}")
+    print(f"DEBUG: api_url: {api_url}")
     
     # Parse the call_log as JSON before sending to Logic App
     try:
+        print("DEBUG: Attempting to parse call_log as JSON...")
         call_log_json = json.loads(call_log)
+        print(f"DEBUG: Successfully parsed JSON: {call_log_json}")
     except json.JSONDecodeError as e:
         print(f"Error parsing call_log as JSON: {e}")
+        print(f"DEBUG: Failed to parse. Raw call_log: {repr(call_log)}")
         return json.dumps({"error": "Invalid JSON format in call_log"})
     
     # make a HTTP POST API call with json payload
-    response = requests.post(
-        api_url,
-        json={"call_logs": call_log_json},
-        headers={"Content-Type": "application/json"},
-    )
-
-    print("response from call log analysis", response.text)
-    return json.dumps(response.text)
+    try:
+        print("DEBUG: Making POST request to Logic App...")
+        response = requests.post(
+            api_url,
+            json={"call_logs": call_log_json},
+            headers={"Content-Type": "application/json"},
+        )
+        print(f"DEBUG: Response status code: {response.status_code}")
+        print("response from call log analysis", response.text)
+        return json.dumps(response.text)
+    except Exception as e:
+        print(f"ERROR: Exception during API call: {e}")
+        return json.dumps({"error": f"API call failed: {str(e)}"})
 
 
 available_functions = {
