@@ -1,0 +1,2 @@
+These are the distinct category names for which sample data is available in the Contoso eCom APIs:
+Apparel, Garments, Winter wear, Stockings, Active wear, Swim wear, Formal wear, Accessories

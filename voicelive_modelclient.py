@@ -12,6 +12,7 @@ import uuid
 import os
 from dotenv import load_dotenv
 import websockets
+from tools import available_functions, tools_list
 
 # Load environment variables
 load_dotenv("./.env", override=True)
@@ -21,6 +22,59 @@ api_version = os.getenv("AZURE_VOICE_LIVE_API_VERSION", "2025-05-01-preview")
 agent_id = os.getenv("VOICE_LIVE_MODEL")
 
 
+system_instructions= """
+You are an AI Agent tasked with responding to questions from the customers of Contoso retail fashions regarding their shopping requirements. 
+When the customer starts the conversation with a greeting, reciprocate as you respond to their queries. 
+Refer to the context provided to you from the Contoso retail knowledge base to respond to their queries.
+**DO NOT RESPOND BASED ON YOUR PERSONAL OPINIONS OR EXPERIENCES**
+You do not have to say anything about files uploaded, etc to the user.
+You have access to the following tools and knowledge. Use these to get context to respond to the user queries:
+- API to search for products by category
+    - These are the distinct category names for which sample data is available in the Contoso eCom APIs:
+        > Apparel, Garments, Winter wear, Stockings, Active wear, Swim wear, Formal wear, Accessories
+    - When the user query provides a category name in the request and asks for products in that category, the category name you pass to the API must be one of the above
+    - If the user query does not provide a category name, ask the user to provide one
+    - When you get the product search results, present them to the user in a numbered list format, with product name, price and description
+- API to order a product based on product id and quantity
+    - Always reconfirm with all the particulars (product details, quantities, prices, total amount) before creating the order. Wait for explicit user confirmation before proceeding.
+    - In your response to the user, provide the order details including order id, product details, quantities, prices, total amount in a numbered list format
+- APIs to create shipment orders
+    - When creating the shipment order, always seek confirmation from the user about the destination address provided before creating it. Repeat back the complete address and ask for confirmation before proceeding.
+    - When you get the shipment order response, provide the user with all the shipment order details in a numbered list format
+- Search tool to perform a QnA on general Contoso retail policies, procedures and QnA
+- APIs to analyze call logs.
+    - When the user indicates there are no more questions, and wants to end the conversation, ask if you could go ahead and conclude the call and submit for analysis
+    - **You do not need to send the results of the analysis back to the user. You could just say the conversation has been logged for analysis.**
+    - The data you send this API for call log analysis should be the full conversation between the customer and you and should be like:
+        ###### Example Conversation History ###### 
+        {
+        "conversation": [
+            {
+            "role": "user",
+            "message": "user input"
+            },
+            {
+            "role": "assistant",
+            "message": "agent response"
+            },
+
+            {
+            "role": "user",
+            "message": "user next question?"
+            },
+            {
+            "role": "assistant",
+            "message": "agent's next response "
+            },
+        ..... and so on ..... 
+            ]
+        }
+        ###### End Example Conversation History###### 
+
+Important confirmation requirements:
+**Empathize with the customer when you respond**
+"""
+
 class VoiceLiveModelClient:
 
     def __init__(self):
@@ -28,13 +82,15 @@ class VoiceLiveModelClient:
         self.event_handlers = defaultdict(list)
         self.session_config = {
             "input_audio_sampling_rate": 24000,
-            "instructions": "You are a helpful AI assistant responding in natural, engaging language.",
+            "instructions": system_instructions,
             "turn_detection": {
                 "type": "server_vad",
                 "threshold": 0.5,
                 "prefix_padding_ms": 300,
                 "silence_duration_ms": 500,
             },
+            "tools": tools_list,
+            "tool_choice": "auto",
             "input_audio_noise_reduction": {"type": "azure_deep_noise_suppression"},
             "input_audio_echo_cancellation": {"type": "server_echo_cancellation"},
             "voice": {
@@ -228,7 +284,58 @@ class VoiceLiveModelClient:
                 # when a user request entails a function call, response.done does not return an audio
                 # It instead returns the functions that match the intent, along with the arguments to invoke it
                 # checking for function call hints in the response
-                print("response done received...")
+                print(f"response done received...{event}")
+                try:
+                    _status = event.get("response", {}).get("status", None)
+                    if "completed" == _status:
+                        output_type = (
+                            event.get("response", {})
+                            .get("output", [{}])[0]
+                            .get("type", None)
+                        )
+                        if "function_call" == output_type:
+                            function_name = (
+                                event.get("response", {})
+                                .get("output", [{}])[0]
+                                .get("name", None)
+                            )
+                            arguments = json.loads(
+                                event.get("response", {})
+                                .get("output", [{}])[0]
+                                .get("arguments", None)
+                            )
+                            tool_call_id = (
+                                event.get("response", {})
+                                .get("output", [{}])[0]
+                                .get("call_id", None)
+                            )
+
+                            function_to_call = available_functions[function_name]
+                            # invoke the function with the arguments and get the response
+                            response = function_to_call(**arguments)
+                            print(
+                                f"called function {function_name}, and the response is:",
+                                response,
+                            )
+                            # send the function call response to the server(model)
+                            await self.send(
+                                "conversation.item.create",
+                                {
+                                    "item": {
+                                        "type": "function_call_output",
+                                        "call_id": tool_call_id,
+                                        "output": json.dumps(response),
+                                    }
+                                },
+                            )
+                            # signal the model(server) to generate a response based on the function call output sent to it
+                            await self.send(
+                                "response.create", {"response": self.response_config}
+                            )
+                except Exception as e:
+                    print("Error in processing function call:", e)
+                    print(traceback.format_exc())
+                    pass
             else:
                 # print("Unknown event type:", event.get("type"))
                 pass
