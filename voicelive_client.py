@@ -1,3 +1,41 @@
+"""
+Azure Voice Live API - Agent-Based Client
+
+This module provides a client for interacting with Azure Voice Live API through an 
+existing Agent configured in Azure AI Foundry Service.
+
+Key Features:
+- Integration with pre-configured Azure AI Foundry Agent
+- No function calling implementation required (Agent handles autonomously)
+- Azure Fast Transcript for speech-to-text conversion
+- GPT-4o-mini model integration via Azure AI Foundry Agent
+- Azure TTS with neural voices supporting Indic languages
+- Multi-language support (en-IN and hi-IN) for transcript generation
+
+Architecture:
+- Azure Voice Live API connects to Azure AI Foundry Agent
+- Azure Fast Transcript processes user speech and sends transcripts to GPT-4o-mini
+- Agent autonomously invokes tool actions without client-side function calling
+- Azure TTS service with Azure Speech Services generates response audio
+- Neural voice (en-IN-AartiIndicNeural) optimized for Indic language support
+
+Language Support:
+- English (India) - en-IN
+- Hindi (India) - hi-IN
+- Neural voice technology for natural-sounding speech synthesis
+
+Usage:
+This client is designed for scenarios where you have an existing Agent in Azure AI Foundry
+and want to leverage its autonomous capabilities. The Agent handles all tool invocations
+and business logic, making this ideal for enterprise scenarios with pre-configured workflows.
+
+Note: GPT-Realtime cannot be used with this approach as the Agent architecture requires
+the transcript-based interaction model through Azure Fast Transcript.
+
+Author: Microsoft Innovation Hub India
+Version: 1.0
+"""
+
 from utils import array_buffer_to_base64, base64_to_array_buffer
 import traceback
 import inspect
@@ -16,6 +54,11 @@ import websockets
 # Load environment variables
 load_dotenv("./.env", override=True)
 
+# Configuration: Required environment variables for Azure AI Foundry Agent integration
+# AZURE_VOICE_LIVE_ENDPOINT: The endpoint URL for Azure Voice Live API
+# AZURE_VOICE_LIVE_API_VERSION: API version (default: 2025-05-01-preview)
+# AI_FOUNDRY_PROJECT_NAME: Azure AI Foundry project name containing the Agent
+# AI_FOUNDRY_AGENT_ID: Unique identifier for the configured Agent in Azure AI Foundry
 endpoint = os.getenv("AZURE_VOICE_LIVE_ENDPOINT")
 api_version = os.getenv("AZURE_VOICE_LIVE_API_VERSION", "2025-05-01-preview")
 project_name = os.getenv("AI_FOUNDRY_PROJECT_NAME")
@@ -23,6 +66,33 @@ agent_id = os.getenv("AI_FOUNDRY_AGENT_ID")
 
 
 class VoiceLiveClient:
+    """
+    Azure Voice Live API Client for Azure AI Foundry Agent Integration
+    
+    This client facilitates communication with Azure Voice Live API through an existing
+    Azure AI Foundry Agent. It handles real-time voice conversations with automatic
+    transcript generation and neural voice synthesis.
+    
+    Key Capabilities:
+    - Azure Fast Transcript integration for speech-to-text
+    - GPT-4o-mini model interaction via Azure AI Foundry Agent
+    - Neural voice synthesis with Indic language support
+    - Semantic voice activity detection (VAD)
+    - Echo cancellation and noise reduction
+    - Multi-language support (en-IN, hi-IN)
+    
+    Configuration:
+    - Input audio sampling rate: 24kHz
+    - Voice: en-IN-AartiIndicNeural (Azure Standard neural voice)
+    - Turn detection: Azure Semantic VAD with configurable thresholds
+    - Audio processing: Deep noise suppression and server echo cancellation
+    
+    Best Practices:
+    - Ensure proper environment variables are configured
+    - Handle WebSocket connection lifecycle appropriately
+    - Implement proper error handling for network interruptions
+    - Monitor audio quality and adjust sampling rates if needed
+    """
 
     def __init__(self):
         self.ws = None
@@ -157,7 +227,7 @@ class VoiceLiveClient:
             # when the user submits a query in the chat interface
             _event = {"type": "conversation_interrupted"}
             # signal the UI to stop playing audio
-            self.dispatch("conversation.interrupted", _event)
+            self.dispatch("conversation.message.interrupted", _event)
 
     async def update_session(self):
         """

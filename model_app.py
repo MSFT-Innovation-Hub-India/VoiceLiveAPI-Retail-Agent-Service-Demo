@@ -1,3 +1,51 @@
+"""
+Azure AI Foundry GPT-Realtime Model - User Interface
+
+This module provides a Chainlit-based user interface for direct interaction with 
+Azure AI Foundry's GPT-Realtime model, enabling Speech-to-Speech conversational experiences.
+
+Key Features:
+- Real-time speech-to-speech conversation interface
+- Direct integration with GPT-Realtime model via voicelive_modelclient.py
+- Low-latency audio streaming and processing
+- Interactive web-based UI powered by Chainlit
+- Session management for conversation tracking
+- Audio chunk processing and playback
+- Conversation interruption handling
+
+Architecture:
+- Chainlit web interface for user interaction
+- VoiceLiveModelClient for GPT-Realtime model communication
+- Real-time audio streaming with PCM16 format
+- Session-based conversation state management
+- Event-driven architecture for audio processing
+
+User Experience:
+- Users can speak directly to the AI and receive immediate spoken responses
+- Supports conversation interruptions and resumptions
+- Provides visual feedback for audio processing states
+- Maintains conversation history and context
+
+Technical Implementation:
+- Uses WebSocket connections for real-time communication
+- Implements audio chunk buffering and streaming
+- Handles conversation state transitions
+- Manages user session data and tracking IDs
+
+Usage:
+Run this application when you want to provide users with a direct speech-to-speech
+interface to GPT-Realtime model. Ideal for voice-first applications, accessibility
+features, and natural conversation experiences.
+
+Dependencies:
+- voicelive_modelclient.py: Core client for GPT-Realtime model interaction
+- Chainlit: Web UI framework for conversational interfaces
+- Azure Voice Live API: Backend speech processing services
+
+Author: Microsoft Innovation Hub India
+Version: 1.0
+"""
+
 import chainlit as cl
 from voicelive_modelclient import VoiceLiveModelClient
 from uuid import uuid4
@@ -5,6 +53,39 @@ import traceback
 
 
 async def init_rtclient():
+    """
+    Initializes the GPT-Realtime model client for direct Speech-to-Speech conversations.
+    
+    This function sets up:
+    - VoiceLiveModelClient connection to Azure Voice Live API with GPT-Realtime
+    - Direct model integration without Azure AI Foundry Agent layer
+    - Session management with unique tracking IDs for audio isolation
+    - Event handlers for real-time speech processing and function calling
+    
+    Key Features:
+    - Direct GPT-Realtime model integration for immediate speech-to-speech
+    - Client-side function calling implementation for tool execution
+    - Low-latency audio streaming with real-time processing
+    - Azure Speech Voice integration for high-quality TTS synthesis
+    - Server-side voice activity detection (VAD) for natural conversation flow
+    
+    Function Calling:
+    - Automatic tool detection and execution based on conversation context
+    - Real-time function parameter extraction and validation
+    - Seamless integration of function results into conversation flow
+    - Support for complex retail operations (search, order, shipment)
+    
+    Session Management:
+    - Unique track IDs prevent audio session conflicts
+    - Real-time transcript updates for conversation tracking
+    - Conversation state management for context preservation
+    
+    Best Practices:
+    - Ensure all required tools are properly imported and configured
+    - Monitor function execution performance and timeouts
+    - Implement proper error handling for speech processing failures
+    - Validate audio format and quality across different devices
+    """
     openai_realtime = VoiceLiveModelClient()
     cl.user_session.set("track_id", str(uuid4()))
     cl.user_session.set("transcript", ["1", "-"])

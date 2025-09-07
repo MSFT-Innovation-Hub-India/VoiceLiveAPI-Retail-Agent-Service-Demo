@@ -1,15 +1,342 @@
-# Contoso Retail Assistant — Voice + Chat (Azure Voice Live API + Chainlit)
+# Contoso Retail Assistant — Azure Voice Live API Integration Demo
 
-An interactive retail assistant that supports natural voice and text conversations using Azure Voice Live API. Built with Chainlit for responsive, real-time UI and robust audio handling.
+A comprehensive demonstration of Azure Voice Live API integration showcasing **two distinct approaches** for building voice-enabled AI assistants. This project provides complete implementations for both direct model integration (GPT-Realtime) and existing Azure AI Foundry Agent integration.
 
-It uses an Azure AI Foundry Project and an Agent in it that has tool actions configured - in this sample, it uses the Contoso Retail eCom APIs that are configured using the Swagger definition.
+## 📋 Table of Contents
 
-## 🛍 Use Case
+1. [Overview](#-overview)
+2. [🎯 Approach 1: Direct Model Integration (GPT-Realtime)](#-approach-1-direct-model-integration-gpt-realtime)
+   - [Introduction & Use Cases](#introduction--use-cases)
+   - [Architecture & Components](#architecture--components)
+   - [Setup & Configuration](#setup--configuration)
+   - [Key Features](#key-features)
+   - [Code Artifacts](#code-artifacts)
+3. [🤖 Approach 2: Azure AI Foundry Agent Integration](#-approach-2-azure-ai-foundry-agent-integration)
+   - [Introduction & Use Cases](#introduction--use-cases-1)
+   - [Architecture & Components](#architecture--components-1)
+   - [Setup & Configuration](#setup--configuration-1)
+   - [Key Features](#key-features-1)
+   - [Code Artifacts](#code-artifacts-1)
+4. [🛍️ Shared Use Case & Business Features](#️-shared-use-case--business-features)
+5. [📊 Call Analytics & Business Intelligence](#-call-analytics--business-intelligence)
+6. [🔒 Security & Compliance](#-security--compliance)
+7. [🔄 Version History](#-version-history)
 
-Contoso's comprehensive in-store/online assistant with advanced automation capabilities:
+## 🌟 Overview
 
-### Core Shopping Features:
-- Answer product questions (price, specs, availability)
+This project demonstrates how **Azure Voice Live API** enables seamless voice integration for AI assistants through two fundamentally different architectural approaches. Each approach serves distinct use cases while maintaining enterprise-grade capabilities and the same rich conversational retail experience.
+
+**Choose Your Integration Path:**
+- 🎯 **Direct Model Integration**: For real-time speech-to-speech applications with custom function calling
+- 🤖 **Agent Integration**: For enterprise scenarios with existing Azure AI Foundry Agents
+
+---
+
+# 🎯 Approach 1: Direct Model Integration (GPT-Realtime)
+
+## Introduction & Use Cases
+
+This approach provides **direct integration** with Azure Voice Live API using GPT-Realtime model for immediate speech-to-speech conversational experiences. It's designed for applications that require ultra-low latency and custom function calling implementation.
+
+### Perfect For:
+- **Voice-First Applications**: Real-time speech interfaces where latency is critical
+- **Custom Function Logic**: Scenarios requiring client-side control over tool execution
+- **Immediate Responses**: Applications where speech-to-speech conversion must be instantaneous
+- **Development Flexibility**: Projects needing direct model parameter control
+
+### Business Scenarios:
+- Interactive voice response (IVR) systems
+- Real-time customer service kiosks
+- Voice-controlled retail assistants
+- Accessibility applications requiring immediate audio feedback
+
+## Architecture & Components
+
+### Technical Architecture:
+```
+User Speech → Azure Voice Live API → GPT-Realtime Model → Function Calling → Tool Execution → Speech Response
+     ↓              ↓                      ↓                  ↓              ↓              ↓
+Audio Input → Speech-to-Speech → Direct Processing → Client Logic → API Calls → Audio Output
+```
+
+### Core Components:
+- **GPT-Realtime Model**: Direct audio-to-audio processing without transcript intermediation
+- **Function Calling Engine**: Client-side implementation for tool execution
+- **Azure Speech Voice**: High-quality TTS synthesis for response audio
+- **WebSocket Communication**: Real-time bidirectional audio streaming
+- **Voice Activity Detection**: Server-side VAD for natural conversation flow
+
+## Setup & Configuration
+
+### Prerequisites:
+- Azure Voice Live API access with GPT-Realtime model support
+- Python 3.10+ environment
+- Azure CLI authentication (DefaultAzureCredential)
+
+### Environment Configuration:
+Create a `.env` file with:
+```env
+# Direct Model Integration Configuration
+AZURE_VOICE_LIVE_ENDPOINT=your_voice_live_endpoint
+AZURE_VOICE_LIVE_API_VERSION=2025-05-01-preview
+VOICE_LIVE_MODEL=your_gpt_realtime_model_id
+```
+
+### Installation & Running:
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the GPT-Realtime Speech-to-Speech interface
+chainlit run model_app.py
+```
+
+## Key Features
+
+### Speech Processing:
+- **🎙️ Direct Speech-to-Speech**: Immediate audio-to-audio conversion via GPT-Realtime
+- **⚡ Ultra-Low Latency**: Minimal delay for real-time conversation flow
+- **�️ Server-Side VAD**: Configurable voice activity detection (threshold: 0.5)
+- **🔊 Azure Speech Voice**: High-quality TTS with customizable voice parameters
+
+### Function Calling:
+- **🔧 Client-Side Implementation**: Full control over function execution logic
+- **⚙️ Dynamic Tool Execution**: Real-time function parameter extraction and validation
+- **�️ Custom Business Logic**: Retail-specific tools (product search, ordering, shipment)
+- **📊 Function Response Integration**: Seamless integration of tool results into conversation
+
+### Audio Configuration:
+- **Sampling Rate**: 24kHz for high-quality audio processing
+- **Turn Detection**: Server VAD with 300ms prefix padding, 500ms silence duration
+- **Audio Format**: Real-time PCM16 streaming
+- **Noise Processing**: Built-in noise suppression and echo cancellation
+
+## Code Artifacts
+
+### Core Files:
+- **`model_app.py`**: Chainlit UI for GPT-Realtime interaction
+  - Real-time audio streaming management
+  - Session tracking and conversation state
+  - Audio chunk processing and playback
+  - Conversation interruption handling
+
+- **`voicelive_modelclient.py`**: Direct Azure Voice Live API client
+  - WebSocket connection management
+  - GPT-Realtime model integration
+  - Function calling implementation
+  - Event processing and audio handling
+
+- **`tools.py`**: Function definitions and execution logic
+  - Product search and catalog APIs
+  - Order management and processing
+  - Shipment creation and tracking
+  - Customer service and support tools
+
+### Key Implementation Details:
+```python
+# Example: Direct model configuration
+session_config = {
+    "input_audio_sampling_rate": 24000,
+    "instructions": system_instructions,
+    "turn_detection": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 500,
+    },
+    "tools": tools_list,  # Client-side function definitions
+    "temperature": 0.8,
+}
+```
+
+---
+
+# 🤖 Approach 2: Azure AI Foundry Agent Integration
+
+## Introduction & Use Cases
+
+This approach leverages **existing Azure AI Foundry Agents** through Azure Voice Live API, providing enterprise-grade voice capabilities without requiring custom function calling implementation. The Agent autonomously handles all tool execution and business logic.
+
+### Perfect For:
+- **Enterprise Deployments**: Organizations with existing Azure AI Foundry investments
+- **Autonomous Operations**: Scenarios where Agents should handle business logic independently
+- **Multi-Language Support**: Applications requiring Indic language capabilities (en-IN, hi-IN)
+- **Governance & Compliance**: Enterprise scenarios requiring centralized Agent management
+
+### Business Scenarios:
+- Enterprise customer service with existing Agent workflows
+- Multi-language customer support (especially Indic markets)
+- Complex business process automation
+- Regulated industries requiring centralized AI governance
+
+## Architecture & Components
+
+### Technical Architecture:
+```
+User Speech → Azure Voice Live API → Azure Fast Transcript → Azure AI Foundry Agent → GPT-4o-mini → Tool Execution → Neural Voice Response
+     ↓              ↓                       ↓                        ↓                  ↓              ↓                    ↓
+Audio Input → Speech Recognition → Text Processing → Agent Logic → Model Processing → API Calls → Audio Output
+```
+
+### Core Components:
+- **Azure Fast Transcript**: Advanced multi-language speech-to-text processing
+- **Azure AI Foundry Agent**: Pre-configured Agent with autonomous capabilities
+- **GPT-4o-mini Model**: Agent-configured model for text processing
+- **Neural Voice Synthesis**: Indic language optimized TTS (en-IN-AartiIndicNeural)
+- **Semantic VAD**: Azure semantic voice activity detection
+
+## Setup & Configuration
+
+### Prerequisites:
+- Azure AI Foundry project with configured Agent
+- Azure Voice Live API access
+- Agent with retail tools and business logic pre-configured
+- Python 3.10+ environment
+
+### Environment Configuration:
+Create a `.env` file with:
+```env
+# Azure AI Foundry Agent Configuration
+AZURE_VOICE_LIVE_ENDPOINT=your_voice_live_endpoint
+AZURE_VOICE_LIVE_API_VERSION=2025-05-01-preview
+AI_FOUNDRY_PROJECT_NAME=your_ai_foundry_project_name
+AI_FOUNDRY_AGENT_ID=your_configured_agent_id
+```
+
+### Installation & Running:
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the Agent-based voice interface
+chainlit run app.py
+```
+
+### Azure AI Foundry Agent Configuration:
+Configure your Agent with the following system prompt:
+```
+You are an AI Agent tasked with helping the customers of Contoso retail fashions with their shopping requirements. You have access to the following:
+- APIs in contoso_retail_fashion_api that you need to call to respond to the user queries. 
+- Once the customer purchases the merchandise, you will help them with a Shipment order based on the delivery address provided by them. 
+- You will also use the File Search tool to help with QnA
+- Once the customer concludes the call or indicates that the call can be ended, then send the entire conversation log to the ContosoRetailCallLogAnalytics_Tool tool action for analysis.
+```
+
+## Key Features
+
+### Language & Voice Capabilities:
+- **🌍 Multi-Language Support**: Optimized for English (India) and Hindi (India)
+- **🗣️ Neural Voice Synthesis**: en-IN-AartiIndicNeural for natural-sounding speech
+- **📝 Azure Fast Transcript**: Advanced speech recognition with Indic language support
+- **🎯 Semantic VAD**: Intelligent voice activity detection with end-of-utterance detection
+
+### Agent Integration:
+- **🤖 Autonomous Operation**: Agent handles all tool execution without client-side function calling
+- **🧠 GPT-4o-mini Processing**: Leverages Agent-configured model capabilities
+- **🏢 Enterprise Ready**: Built for complex business workflows and governance
+- **🛠️ Pre-configured Tools**: Agent comes with retail business logic pre-implemented
+
+### Audio Configuration:
+- **Sampling Rate**: 24kHz with Azure Fast Transcript processing
+- **Turn Detection**: Azure semantic VAD (threshold: 0.3, 200ms padding, 200ms silence)
+- **Voice Settings**: en-IN-AartiIndicNeural with temperature 0.8
+- **Audio Processing**: Deep noise suppression and server echo cancellation
+
+## Code Artifacts
+
+### Core Files:
+- **`app.py`**: Chainlit UI for Azure AI Foundry Agent interaction
+  - Agent-based conversation management
+  - Multi-language session handling
+  - Real-time transcript display
+  - Audio streaming for Agent responses
+
+- **`voicelive_client.py`**: Azure AI Foundry Agent integration client
+  - Agent WebSocket communication
+  - Azure Fast Transcript integration
+  - Multi-language voice configuration
+  - Agent response processing
+
+### Key Implementation Details:
+```python
+# Example: Agent integration configuration
+session_config = {
+    "input_audio_sampling_rate": 24000,
+    "turn_detection": {
+        "type": "azure_semantic_vad",
+        "threshold": 0.3,
+        "prefix_padding_ms": 200,
+        "silence_duration_ms": 200,
+        "remove_filler_words": False,
+        "end_of_utterance_detection": {
+            "model": "semantic_detection_v1",
+            "threshold": 0.01,
+            "timeout": 2,
+        },
+    },
+    "voice": {
+        "name": "en-IN-AartiIndicNeural",
+        "type": "azure-standard",
+        "temperature": 0.8,
+    },
+}
+```
+
+### Agent Configuration Screenshot:
+![Azure AI Foundry Agent](./images/FoundryAgent.png)
+
+---
+
+# 🛍️ Shared Use Case & Business Features
+
+Both integration approaches support the same comprehensive retail assistant capabilities, providing a consistent business experience regardless of the technical implementation chosen.
+
+## Core Shopping Features:
+- **Product Questions**: Answer queries about price, specifications, availability
+- **Order Management**: Place orders with full order lifecycle management
+- **Product Recommendations**: AI-powered search and suggestion capabilities
+- **Vector-Powered File Search**: QnA on order processing, returns, payment issues, and policies
+
+## Advanced Automation Features:
+- **Automated Shipment Creation**: After order placement, automatically creates shipment orders by:
+  - Requesting delivery address from the user
+  - Calling Azure Logic App that creates Shipment Order in Azure SQL Database
+  - Providing shipment tracking information
+
+- **Intelligent Conversation Analytics**: Autonomous conversation analysis by:
+  - Capturing entire user conversation context
+  - Sending conversation data to Azure Logic App powered by GPT-4o
+  - Performing comprehensive analysis including:
+    - Key conversation information extraction
+    - Customer sentiment analysis
+    - Agent performance evaluation
+  - Storing analytics data in Azure Cosmos DB for business insights
+
+## Example Queries (Supported by Both Approaches):
+- "What are the products in Winter wear?"
+- "What are the products in Active Wear?"
+- "I want to order 5 numbers of Product ID 24"
+- "What is your return policy?"
+- "How do I track my shipment?"
+- "I need help with payment issues"
+
+## Solution Architecture
+
+![Solution Architecture](./images/architecture.png)
+
+### Universal Azure Voice Live API Benefits:
+
+Both approaches leverage the core capabilities of **Azure Voice Live API**:
+
+🎙️ **Single Integration Point** - Elegant wrapper around existing systems with minimal integration effort
+
+🧠 **Flexible Architecture** - Support for both direct model integration and enterprise Agent workflows
+
+🔄 **Turnkey Speech Capabilities** - Built-in speech-to-text, text-to-speech, VAD, echo cancellation, and noise suppression
+
+⚡ **Real-time Streaming** - Bidirectional audio streaming with optimized latency for natural conversation flow
+
+🛡️ **Enterprise Ready** - Built-in security, compliance, and scalability features for production deployments
 - Place orders with full order management
 - Product recommendations and search
 - Vector-powered File Search for QnA on order processing, returns, payment issues, and policies
@@ -43,11 +370,25 @@ Optimized for hands-free, multi-turn conversations with live transcripts, spoken
 
 ![Solution Architecture](./images/architecture.png)
 
-### Seamless Voice Enablement with Azure Voice Live API
+### Azure Voice Live API: Two Integration Paradigms
 
-Traditional approaches to building voice-enabled AI assistants would require significant architectural changes and custom development. However, with **Azure Voice Live API**, the same development team that built a text-based agent doesn't need to worry about making the agent itself voice-enabled—it becomes a seamless wrapper around their existing intelligent system.
+**Azure Voice Live API** revolutionizes voice-enabled AI development by supporting two distinct integration approaches, each optimized for different use cases while maintaining enterprise-grade capabilities.
 
-Azure Voice Live API transforms this landscape by providing:
+#### Paradigm 1: Direct Model Integration (GPT-Realtime)
+- **🎯 Real-Time Speech Processing**: Direct audio-to-audio conversion with GPT-Realtime
+- **⚡ Ultra-Low Latency**: Immediate responses for voice-first applications
+- **🔧 Custom Function Calling**: Client-side implementation with full control
+- **🎛️ Model Parameter Control**: Direct access to model configuration and behavior
+
+#### Paradigm 2: Agent-Based Integration (Azure AI Foundry)
+- **🤖 Enterprise Agent Utilization**: Leverages existing Azure AI Foundry Agent investments
+- **🌍 Multi-Language Excellence**: Optimized for Indic languages (en-IN, hi-IN)
+- **🛠️ Autonomous Operations**: Agent handles all tool execution independently
+- **📈 Enterprise Scalability**: Built for complex business workflows and governance
+
+### Universal Voice Live API Benefits
+
+Regardless of the integration approach, **Azure Voice Live API** provides:
 
 🎙️ **Single Integration Point** - The Voice Live API sits as an elegant wrapper around the existing agent, requiring minimal integration effort
 
@@ -59,95 +400,13 @@ Azure Voice Live API transforms this landscape by providing:
 
 🛡️ **Enterprise Ready** - Built-in security, compliance, and scalability features suitable for production deployments
 
-### Architecture Components
+---
 
-This application uses a modular architecture for better maintainability and reusability:
+# 📊 Call Analytics & Business Intelligence
 
-- **`app.py`** - Main Chainlit application and UI orchestration
-- **`voicelive_client.py`** - Azure Voice Live API client with WebSocket handling
-- **`utils.py`** - Utility functions for audio processing
-- **Configuration** - Environment-based configuration management
+*This analytics system works with both integration approaches, providing enterprise-grade conversation insights regardless of whether you use Direct Model Integration or Azure AI Foundry Agent Integration.*
 
-### Key Features
-- **Modular Components**: Each module has a single responsibility
-- **Event-Driven Architecture**: Clean callback system for API events
-- **Real-time Audio Processing**: Robust audio handling with buffering
-- **Azure AD Auth**: Uses DefaultAzureCredential with `https://ai.azure.com/.default` scope
-- **Voice Optimization**: 24kHz audio, semantic VAD, noise suppression, echo cancellation
-- **Assistant Interruption**: Voice or text input cancels current response
-- **Real-time UI**: Live transcripts and streaming responses
-- **Optimized Placeholder Messages**: Simple placeholder text ("...") to avoid AI assistant confusion
-- **Automated Shipment Processing**: Integration with Azure Logic Apps for order fulfillment
-- **AI-Powered Conversation Analytics**: GPT-4o powered analysis with Cosmos DB storage
-- **Vector File Search**: Intelligent QnA capabilities for policies and support topics
-
-## 🔧 Recent Improvements
-
-### Placeholder Message Optimization (Latest Update)
-- **Issue Fixed**: The AI assistant was misinterpreting descriptive placeholder messages like "🎤 Listening..." and "[Voice input - processing transcript...]" as file upload indicators
-- **Solution Implemented**: Simplified all placeholder messages to use neutral "..." text
-- **Benefit**: Eliminates false "file upload" responses from the assistant, ensuring smooth voice conversations
-- **Files Modified**: `app.py` - Updated `ensure_user_message_placeholder()`, `handle_conversation_thread_updated()`, `handle_user_input_transcript_done()`, and `handle_user_speech_stopped()` functions
-
-## ✅ Prerequisites
-
-- Python 3.10+
-- An Azure AI Foundry project/agent configured for Voice Live
-- Ability to obtain AAD tokens via DefaultAzureCredential (e.g., Azure CLI sign-in)
-
-## 🤖 AI Agent Configuration
-
-When setting up your AI Agent in Azure AI Foundry, use the following system prompt:
-
-```
-You are an AI Agent tasked with helping the customers of Contoso retail fashions with their shopping requirements. You have access to the following:
-- APIs in contoso_retail_fashion_api that you need to call to respond to the user queries. 
-- Once the customer purchases the merchandise, you will help them with a Shipment order based on the delivery address provided by them. 
-- You will also use the File Search tool to help with QnA
-- Once the customer concludes the call or indicates that the call can be ended, then send the entire conversation log to the ContosoRetailCallLogAnalytics_Tool tool action for analysis. The data you send should be like:
-{
-  "conversation": [
-    {
-      "role": "user",
-      "message": "user input"
-    },
-    {
-      "role": "assistant",
-      "message": "agent response"
-    },
-
-    {
-      "role": "user",
-      "message": "Hey, what do you have in winter wear?"
-    },
-    {
-      "role": "assistant",
-      "message": "agent response sdasdasd "
-    },
-..... and so on ..... 
-      ]
-}
-
-Important confirmation requirements:
-- When the user places an order, always reconfirm with all the particulars (product details, quantities, prices, total amount) before creating the order. Wait for explicit user confirmation before proceeding.
-- When creating the shipment order, always seek confirmation from the user about the destination address provided before creating it. Repeat back the complete address and ask for confirmation before proceeding.
-```
-
-This system prompt configures the agent to:
-- Act as a Contoso retail fashion assistant
-- Use the retail fashion APIs for product queries
-- Handle shipment orders post-purchase with Azure Logic App integration
-- Utilize Vector File Search for QnA on policies, returns, payments, and support topics
-- **Automated conversation analytics** using GPT-4o powered Azure Logic App
-- **Confirm order details** before placing orders
-- **Verify shipping addresses** before creating shipments
-- **Capture and analyze** complete conversation logs for sentiment and performance insights
-
-See the screenshot of the Agent existing in Azure AI Foundry Agent Service:
-
-![alt text](./images/FoundryAgent.png)
-
-## 📊 Call Log Analytics Configuration
+## Call Log Analytics Configuration
 
 The conversation analytics feature uses a separate Azure Logic App with GPT-4o to analyze call quality and extract insights. This Logic App uses the following system prompt and function schema:
 
@@ -476,29 +735,83 @@ This extended architecture enables enterprise-scale analytics with:
 
 This architecture provides scalable, secure, and intelligent retail assistance with comprehensive analytics and automation.
 
-## 📁 Project Structure
+## � File Structure Summary
 
-- `app.py` — Main Chainlit application with optimized placeholder handling
-- `voicelive_client.py` — Azure Voice Live API WebSocket client
-- `utils.py` — Audio processing utilities
-- `chainlit.md` — Chainlit UI welcome message
-- `requirements.txt` — Python dependencies
-- `images/` — Documentation assets
-- `logs/` — Runtime logs (if configured)
+### Direct Model Integration Files:
+- **`model_app.py`** — Chainlit UI for GPT-Realtime Speech-to-Speech interaction
+- **`voicelive_modelclient.py`** — Direct Azure Voice Live API client with function calling
+- **`tools.py`** — Function definitions and execution logic
 
-## 🔒 Notes on Auth & Data
+### Azure AI Foundry Agent Files:
+- **`app.py`** — Chainlit UI for Agent-based voice interaction
+- **`voicelive_client.py`** — Azure AI Foundry Agent integration client
 
-- Uses Azure AD tokens (DefaultAzureCredential) with scope `https://ai.azure.com/.default`.
-- Token is sent as `Authorization: Bearer` and as `agent-access-token` in the WS query.
-- Audio and text are streamed to Azure Voice Live API. Review your organization's privacy/compliance requirements before production use.
-
-## 🔄 Version History
-
-### Latest Changes
-- **Placeholder Message Fix**: Simplified all user message placeholders to "..." to prevent AI assistant from misinterpreting them as file upload indicators
-- **Improved User Experience**: Eliminated false "file upload" responses during voice conversations
-- **Code Optimization**: Updated event handlers in `app.py` for better message flow management
+### Shared Files:
+- **`utils.py`** — Audio processing utilities for both approaches
+- **`chainlit.md`** — Chainlit UI welcome message
+- **`requirements.txt`** — Python dependencies
+- **`images/`** — Documentation assets and architecture diagrams
+- **`.env`** — Environment configuration (create based on chosen approach)
 
 ---
 
-Made with ❤️ using Chainlit and Azure Voice Live API for a smooth retail voice experience.
+# 🔒 Security & Compliance
+
+Both integration approaches implement enterprise-grade security measures to ensure data protection and regulatory compliance.
+
+## Authentication & Authorization
+- **Azure AD Integration**: Uses DefaultAzureCredential with scope `https://ai.azure.com/.default`
+- **Token-Based Security**: Secure token transmission via `Authorization: Bearer` headers
+- **WebSocket Security**: Authenticated WebSocket connections with `agent-access-token` parameters
+- **Multi-Tenant Support**: Compatible with Azure multi-tenant configurations
+
+## Data Protection
+- **Audio Streaming**: Real-time audio data is processed through Azure Voice Live API
+- **Transcript Handling**: Voice transcripts are processed according to Azure data governance policies
+- **Conversation Analytics**: Call data stored in Azure Cosmos DB with encryption at rest
+- **Privacy Compliance**: Review organizational privacy requirements before production deployment
+
+## Approach-Specific Security Considerations
+
+### Direct Model Integration Security:
+- **Function Calling**: Client-side function execution with parameter validation
+- **Model Access**: Direct GPT-Realtime model interaction with secure API calls
+- **Custom Logic**: Implement appropriate input sanitization for function parameters
+
+### Azure AI Foundry Agent Security:
+- **Agent Governance**: Centralized security policies through Azure AI Foundry
+- **Autonomous Operations**: Agent executes tools within governed Azure environment
+- **Enterprise Controls**: Leverage existing Azure AI Foundry security configurations
+
+## Best Practices
+- **Environment Variables**: Store sensitive configuration in secure .env files
+- **Network Security**: Use HTTPS/WSS for all API communications
+- **Access Controls**: Implement role-based access controls for production deployments
+- **Monitoring**: Enable Azure monitoring and logging for security insights
+
+---
+
+# 🔄 Version History
+
+## Latest Updates
+- **📋 Documentation Restructure**: Separated into distinct sections for each integration approach
+- **🎯 Clear Approach Guidance**: Added detailed guidance for choosing the right integration method
+- **🛠️ Enhanced Setup Instructions**: Comprehensive environment configuration and running instructions
+- **🔒 Security Documentation**: Added enterprise security and compliance considerations
+- **📊 Analytics Integration**: Comprehensive call analytics and business intelligence documentation
+
+## Previous Changes
+- **🔧 Placeholder Message Fix**: Simplified user message placeholders to prevent AI confusion
+- **⚡ Performance Optimization**: Enhanced event handlers for better message flow
+- **🎙️ Audio Processing**: Improved real-time audio streaming and processing
+
+---
+
+**🎉 Ready to Get Started?**
+
+1. **Choose your integration approach** based on your use case
+2. **Set up your environment** with the appropriate configuration
+3. **Run the application** using the provided commands
+4. **Explore the analytics** to gain insights from conversations
+
+Made with ❤️ using **Azure Voice Live API**, **Chainlit**, and **Azure AI Services** for enterprise-grade voice-enabled retail experiences.

@@ -1,3 +1,32 @@
+"""
+Azure Voice Live API - Direct Model Client
+
+This module provides a client for interacting directly with Azure Voice Live API using a 
+GPT-Realtime model without going through an Agent in Azure AI Foundry Service.
+
+Key Features:
+- Direct interaction with Azure Voice Live API and GPT-Realtime model
+- Speech-to-Speech capabilities using GPT-Realtime for real-time audio processing
+- Function calling implementation to invoke tool actions autonomously
+- Azure Speech Voice integration for Text-to-Speech (TTS) synthesis
+- Real-time audio streaming and processing
+- WebSocket-based communication for low-latency interactions
+
+Architecture:
+- Uses GPT-Realtime model for immediate speech-to-speech conversion
+- Implements function calling to execute tool actions (product search, orders, etc.)
+- Leverages Azure Speech Services for high-quality voice synthesis
+- Direct API integration without Azure AI Foundry Agent dependencies
+
+Usage:
+This client is designed for scenarios where you need direct control over the 
+conversation flow and want to implement custom function calling logic.
+It's ideal for real-time voice applications requiring immediate responses.
+
+Author: Microsoft Innovation Hub India
+Version: 1.0
+"""
+
 from utils import array_buffer_to_base64, base64_to_array_buffer
 import traceback
 import inspect
@@ -17,6 +46,7 @@ from tools import available_functions, tools_list
 # Load environment variables
 load_dotenv("./.env", override=True)
 
+# Configuration: Required environment variables for Azure Voice Live API
 endpoint = os.getenv("AZURE_VOICE_LIVE_ENDPOINT")
 api_version = os.getenv("AZURE_VOICE_LIVE_API_VERSION", "2025-05-01-preview")
 agent_id = os.getenv("VOICE_LIVE_MODEL")
@@ -76,6 +106,40 @@ Important confirmation requirements:
 """
 
 class VoiceLiveModelClient:
+    """
+    Azure Voice Live API Client for Direct GPT-Realtime Model Integration
+    
+    This client provides direct integration with Azure Voice Live API using GPT-Realtime
+    model for immediate speech-to-speech conversational experiences. It implements
+    function calling capabilities to execute tool actions autonomously.
+    
+    Key Capabilities:
+    - Direct GPT-Realtime model integration for speech-to-speech processing
+    - Function calling implementation for tool action execution
+    - Azure Speech Voice integration for high-quality TTS
+    - Real-time audio streaming with low latency
+    - Server-side voice activity detection (VAD)
+    - Custom system instructions and conversation management
+    
+    Function Calling:
+    - Automatically invokes available tools based on conversation context
+    - Supports product search, order management, and customer service functions
+    - Implements dynamic function execution with parameter validation
+    - Handles tool responses and integrates them into conversation flow
+    
+    Audio Configuration:
+    - Input audio sampling rate: 24kHz
+    - Server VAD with configurable threshold and timing
+    - Echo cancellation and noise reduction
+    - Azure Speech Services for TTS synthesis
+    
+    Best Practices:
+    - Ensure all required tools are properly imported and configured
+    - Implement proper error handling for function execution
+    - Monitor token usage and conversation context length
+    - Handle WebSocket connection lifecycle and reconnection logic
+    - Validate function parameters before execution
+    """
 
     def __init__(self):
         self.ws = None
@@ -142,7 +206,23 @@ class VoiceLiveModelClient:
         )
 
     async def connect(self):
-        """Connects the client using a WS Connection to the Realtime API."""
+        """
+        Establishes WebSocket connection to Azure Voice Live API for GPT-Realtime model.
+        
+        This method:
+        - Obtains Azure authentication token using DefaultAzureCredential
+        - Constructs WebSocket URL with proper API version and model parameters
+        - Establishes secure WebSocket connection with authentication headers
+        - Prepares the client for real-time audio communication
+        
+        Raises:
+            Exception: If connection fails or authentication is invalid
+            
+        Best Practices:
+        - Ensure proper Azure credentials are configured
+        - Handle connection timeouts and retries
+        - Monitor connection health for production deployments
+        """
         if self.is_connected():
             # raise Exception("Already connected")
             self.log("Already connected")  # Get access token
@@ -218,11 +298,36 @@ class VoiceLiveModelClient:
             print("session updated...")
 
     async def receive(self):
-        """Asynchronously receives and processes messages from the WebSocket connection.
-        This function listens for incoming messages from the WebSocket connection (`self.ws`),
-        decodes the JSON-encoded messages, and processes them based on their event type.
-        It handles various event types such as errors, audio responses, speech detection,
-        and function call responses.
+        """
+        Asynchronously receives and processes messages from the WebSocket connection.
+        
+        This is the core event processing function that:
+        - Listens for incoming messages from the Azure Voice Live API
+        - Decodes JSON-encoded messages and processes them by event type
+        - Handles various event types including:
+          * Audio responses and speech detection
+          * Function call requests and responses
+          * Session updates and error handling
+          * Conversation state management
+          
+        Key Event Types Processed:
+        - response.audio.delta: Real-time audio chunks for playback
+        - response.function_call_arguments.delta: Function calling parameters
+        - response.function_call_arguments.done: Complete function execution
+        - input_audio_buffer.speech_started/stopped: Voice activity detection
+        - error: Error handling and logging
+        
+        Function Calling Integration:
+        - Automatically detects function call requests from the model
+        - Executes available functions with provided parameters
+        - Sends function results back to the model for continued conversation
+        - Handles function execution errors gracefully
+        
+        Best Practices:
+        - Monitor for connection drops and implement reconnection logic
+        - Handle function execution timeouts appropriately
+        - Log important events for debugging and monitoring
+        - Validate function parameters before execution
         """
         async for message in self.ws:
             event = json.loads(message)
