@@ -50,8 +50,8 @@ tools_list = [
     },
     {
         "type": "function",
-        "name": "search_products_by_category",
-        "description": "call this function to search for products by category",
+        "name": "get_products_by_category",
+        "description": "call this function to get all the products under a category",
         "parameters": {
             "type": "object",
             "properties": {
@@ -60,7 +60,20 @@ tools_list = [
             "required": ["category"],
         },
     },
-        {
+    {
+        "type": "function",
+        "name": "search_products_by_category_and_price",
+        "description": "call this function to search for products by category and price range",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string"},
+                "price": {"type": "number"},
+            },
+            "required": ["category", "price"],
+        },
+    },
+    {
         "type": "function",
         "name": "order_products",
         "description": "call this function to order products by product id and quantity",
@@ -74,7 +87,6 @@ tools_list = [
         },
     }
 ]
-
 
 def perform_search_based_qna(query):
     print("calling search to get context for the response ....")
@@ -177,10 +189,13 @@ available_functions = {
     "perform_search_based_qna": perform_search_based_qna,
     "create_delivery_order": create_delivery_order,
     "perform_call_log_analysis": perform_call_log_analysis,
-    "search_products_by_category": lambda category: requests.get(
-        f"{ecom_api_url}/SearchProductsByCategory?category={category}"
+    "get_products_by_category": lambda category: requests.get(
+        f"{ecom_api_url}/api/products/category/{category}"
+    ).json(),
+    "search_products_by_category_and_price": lambda category, price: requests.get(
+        f"{ecom_api_url}/api/products/search?category={category}&price={price}"
     ).json(),
     "order_products": lambda product_id, quantity: requests.get(
-        f"{ecom_api_url}/orderproduct?id={product_id}&quantity={quantity}"
+        f"{ecom_api_url}/api/orders/?id={product_id}&quantity={quantity}"
     ).json(),
 }

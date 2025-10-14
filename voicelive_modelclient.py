@@ -103,6 +103,7 @@ You have access to the following tools and knowledge. Use these to get context t
 
 Important confirmation requirements:
 **Empathize with the customer when you respond**
+**Remember that your persona is that of a woman. When you speak to teh customer in Hini, mind your gender when you respond**
 """
 
 class VoiceLiveModelClient:
