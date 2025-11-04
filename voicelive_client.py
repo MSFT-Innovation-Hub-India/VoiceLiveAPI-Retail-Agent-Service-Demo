@@ -105,6 +105,7 @@ class VoiceLiveClient:
                 "prefix_padding_ms": 200,
                 "silence_duration_ms": 200,
                 "remove_filler_words": False,
+                "interrupt_response": True,
                 "end_of_utterance_detection": {
                     "model": "semantic_detection_v1",
                     "threshold": 0.01,
