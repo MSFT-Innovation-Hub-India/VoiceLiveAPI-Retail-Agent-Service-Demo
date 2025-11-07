@@ -159,7 +159,7 @@ class VoiceLiveModelClient:
             "input_audio_noise_reduction": {"type": "azure_deep_noise_suppression"},
             "input_audio_echo_cancellation": {"type": "server_echo_cancellation"},
             "voice": {
-                "name": "en-IN-AartiIndicNeural",
+                "name": "en-IN-Meera:DragonHDV2.3Neural",
                 "type": "azure-standard",
                 "temperature": 0.8,
             },
