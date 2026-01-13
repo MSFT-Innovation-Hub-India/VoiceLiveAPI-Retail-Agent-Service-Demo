@@ -138,22 +138,35 @@ session_config = {
             "instructions": system_instructions,
             "turn_detection": {
                 "type": "server_vad",
-                "threshold": 0.5,
+        "threshold": 0.7,
                 "prefix_padding_ms": 300,
-                "silence_duration_ms": 500,
+        "silence_duration_ms": 900,
             },
             "tools": tools_list,
             "tool_choice": "auto",
             "input_audio_noise_reduction": {"type": "azure_deep_noise_suppression"},
             "input_audio_echo_cancellation": {"type": "server_echo_cancellation"},
             "voice": {
-                "name": "en-IN-AartiIndicNeural",
+        "name": "en-IN-Meera:DragonHDV2.3Neural",
                 "type": "azure-standard",
                 "temperature": 0.8,
             },
             "input_audio_transcription": {"model": "whisper-1"},
         }
 ```
+
+### Handling coughs/brief noises without interrupting playback
+
+We added a debounce-based interruption guard in the GPT-Realtime client to ignore transient sounds (e.g., coughs) that previously stopped response audio:
+
+- Where: [voicelive_modelclient.py](voicelive_modelclient.py#L306-L373)
+- What: `input_audio_buffer.speech_started` now starts a 450 ms debounce (`interrupt_debounce_ms`), and only if speech persists does it dispatch `conversation.interrupted`. `speech_stopped` cancels the pending interrupt so short noises are ignored.
+- Tuning: Server VAD threshold raised to `0.7` with `silence_duration_ms=900` for fewer false positives; adjust per mic/room if needed.
+
+How it works step-by-step:
+1) Speech start → mark `_speech_active = True`, cancel any prior pending interrupt, schedule `_debounced_interrupt` (450 ms).
+2) If speech stops before debounce elapses → `_speech_active` is reset and the pending task is canceled; no interrupt is dispatched.
+3) If speech continues past the debounce window → dispatch `conversation.interrupted` to pause/stop playback as intended.
 
 ---
 

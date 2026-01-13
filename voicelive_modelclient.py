@@ -145,14 +145,17 @@ class VoiceLiveModelClient:
     def __init__(self):
         self.ws = None
         self.event_handlers = defaultdict(list)
+        self._speech_active = False
+        self._pending_interrupt_task = None
+        self.interrupt_debounce_ms = 450
         self.session_config = {
             "input_audio_sampling_rate": 24000,
             "instructions": system_instructions,
             "turn_detection": {
                 "type": "server_vad",
-                "threshold": 0.5,
+                "threshold": 0.7,
                 "prefix_padding_ms": 300,
-                "silence_duration_ms": 500,
+                "silence_duration_ms": 900,
             },
             "tools": tools_list,
             "tool_choice": "auto",
@@ -355,18 +358,17 @@ class VoiceLiveModelClient:
                 # Hence we need to send a 'response.create' event to signal the server to respond
                 await self.send("response.create", {"response": self.response_config})
             elif event["type"] == "input_audio_buffer.speech_started":
-                # The server has detected speech input from the user. Hence use this event to signal the UI to stop playing any audio if playing one
-                # Also trigger creation of user message placeholder
+                # Debounce speech start to avoid treating brief coughs as interruptions
                 print("conversation interrupted through new audio input .......")
-                _event = {"type": "conversation_interrupted"}
-                # signal the UI to stop playing audio
-                self.dispatch("conversation.interrupted", _event)
-
-                # Signal that user started speaking to create placeholder
-                _speech_event = {"type": "user_speech_started"}
-                # self.dispatch("user.speech.started", _speech_event)
+                self._speech_active = True
+                self._cancel_pending_interrupt()
+                self._pending_interrupt_task = asyncio.create_task(
+                    self._debounced_interrupt()
+                )
             elif event["type"] == "input_audio_buffer.speech_stopped":
-                # User stopped speaking - can update placeholder to show processing
+                # User stopped speaking - cancel pending interrupts for short noises
+                self._speech_active = False
+                self._cancel_pending_interrupt()
                 _speech_event = {"type": "user_speech_stopped"}
                 # self.dispatch("user.speech.stopped", _speech_event)
             elif event["type"] == "response.audio_transcript.delta":
@@ -448,6 +450,22 @@ class VoiceLiveModelClient:
 
     async def close(self):
         await self.ws.close()
+
+    def _cancel_pending_interrupt(self):
+        if self._pending_interrupt_task:
+            self._pending_interrupt_task.cancel()
+            self._pending_interrupt_task = None
+
+    async def _debounced_interrupt(self):
+        try:
+            await asyncio.sleep(self.interrupt_debounce_ms / 1000)
+            if self._speech_active:
+                _event = {"type": "conversation_interrupted"}
+                self.dispatch("conversation.interrupted", _event)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self._pending_interrupt_task = None
 
     async def append_input_audio(self, array_buffer):
         """
